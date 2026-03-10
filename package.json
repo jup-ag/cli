@@ -1,0 +1,35 @@
+{
+  "name": "@jup-ag/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "jup": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
+    "build:binary": "bun build src/index.ts --compile --outfile dist/jup",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prettier": "^3.8.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@scure/bip32": "^2.0.1",
+    "@scure/bip39": "^2.0.1",
+    "@solana/kit": "^6.2.0",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.3",
+    "ky": "^1.14.3"
+  }
+}
