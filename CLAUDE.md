@@ -29,14 +29,13 @@ bun run test
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 4 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 3 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/use/solana-import`
-- `TokensCommand` — `tokens search`
-- `SpotCommand` — `spot quote/swap`
+- `SpotCommand` — `spot tokens/quote/swap`
 
 **Libraries** (`src/lib/`):
 

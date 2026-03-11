@@ -10,7 +10,16 @@ export class SpotCommand {
   public static register(program: Command): void {
     const spot = program
       .command("spot")
-      .description("Quote and execute spot swaps");
+      .description("Spot trading: token search, quotes, and swaps");
+    spot
+      .command("tokens")
+      .description("Search for tokens by symbol or mint address")
+      .requiredOption(
+        "--search <query>",
+        "Token symbol or comma-delimited mint addresses"
+      )
+      .option("--limit <n>", "Max number of results")
+      .action((opts) => this.tokens(opts));
     spot
       .command("quote")
       .description("Get a swap quote")
@@ -34,6 +43,47 @@ export class SpotCommand {
       )
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.swap(opts));
+  }
+
+  private static async tokens(opts: {
+    search: string;
+    limit?: string;
+  }): Promise<void> {
+    if (opts.limit && isNaN(Number(opts.limit))) {
+      throw new Error("--limit must be a number");
+    }
+
+    const tokens = await DatapiClient.search({
+      query: opts.search,
+      limit: opts.limit,
+    });
+
+    if (tokens.length === 0) {
+      throw new Error("No tokens found matching query.");
+    }
+
+    if (Output.isJson()) {
+      Output.json(tokens);
+      return;
+    }
+
+    Output.table({
+      type: "horizontal",
+      headers: {
+        id: "Address",
+        symbol: "Symbol",
+        name: "Name",
+        price: "Price",
+        mcap: "Market Cap",
+        verified: "Verified",
+      },
+      rows: tokens.map((t) => ({
+        ...t,
+        price: Output.formatDollar(t.usdPrice),
+        mcap: Output.formatDollar(t.mcap),
+        verified: Output.formatBoolean(t.isVerified),
+      })),
+    });
   }
 
   private static async quote(opts: {

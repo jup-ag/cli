@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { ConfigCommand } from "./commands/ConfigCommand.ts";
 import { KeysCommand } from "./commands/KeysCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
-import { TokensCommand } from "./commands/TokensCommand.ts";
+
 import { Config } from "./lib/Config.ts";
 import { Output } from "./lib/Output.ts";
 
@@ -28,7 +28,6 @@ program
 
 ConfigCommand.register(program);
 KeysCommand.register(program);
-TokensCommand.register(program);
 SpotCommand.register(program);
 
 program.parseAsync().catch((err: unknown) => {
