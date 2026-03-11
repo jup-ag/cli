@@ -13,11 +13,14 @@
     "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
     "build:binary": "bun build src/index.ts --compile --outfile dist/jup",
     "typecheck": "bunx tsc --noEmit",
+    "lint": "bunx oxlint src",
     "test": "bun test",
+    "ci": "bun run lint && bun run typecheck && bun run test",
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "oxlint": "^1.53.0",
     "prettier": "^3.8.1"
   },
   "peerDependencies": {

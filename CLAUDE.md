@@ -20,11 +20,8 @@ bun build src/index.ts --compile --outfile jup
 # Format code
 bunx prettier --write .
 
-# Type-check
-bun run typecheck
-
-# Run tests
-bun run test
+# Run all tests: lint, typecheck, tests
+bun run ci
 ```
 
 ## Architecture
