@@ -6,12 +6,12 @@ import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 
-export class SwapsCommand {
+export class SpotCommand {
   public static register(program: Command): void {
-    const swaps = program
-      .command("swaps")
-      .description("Quote and execute swaps");
-    swaps
+    const spot = program
+      .command("spot")
+      .description("Quote and execute spot swaps");
+    spot
       .command("quote")
       .description("Get a swap quote")
       .requiredOption("--from <token>", "Input token (symbol or mint address)")
@@ -22,8 +22,8 @@ export class SwapsCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .action((opts) => this.quote(opts));
-    swaps
-      .command("execute")
+    spot
+      .command("swap")
       .description("Execute a swap")
       .requiredOption("--from <token>", "Input token (symbol or mint address)")
       .requiredOption("--to <token>", "Output token (symbol or mint address)")
@@ -33,7 +33,7 @@ export class SwapsCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.execute(opts));
+      .action((opts) => this.swap(opts));
   }
 
   private static async quote(opts: {
@@ -42,12 +42,12 @@ export class SwapsCommand {
     amount?: string;
     rawAmount?: string;
   }): Promise<void> {
+    this.validateAmountOpts(opts);
+
     const [inputToken, outputToken] = await Promise.all([
       this.resolveToken(opts.from),
       this.resolveToken(opts.to),
     ]);
-
-    this.validateAmountOpts(opts);
 
     const order = await UltraClient.getOrder({
       inputMint: inputToken.id,
@@ -109,22 +109,21 @@ export class SwapsCommand {
     });
   }
 
-  private static async execute(opts: {
+  private static async swap(opts: {
     from: string;
     to: string;
     amount?: string;
     rawAmount?: string;
     key?: string;
   }): Promise<void> {
-    const settings = Config.load();
-    const signer = await Signer.load(opts.key ?? settings.activeKey);
+    this.validateAmountOpts(opts);
 
-    const [inputToken, outputToken] = await Promise.all([
+    const settings = Config.load();
+    const [signer, inputToken, outputToken] = await Promise.all([
+      Signer.load(opts.key ?? settings.activeKey),
       this.resolveToken(opts.from),
       this.resolveToken(opts.to),
     ]);
-
-    this.validateAmountOpts(opts);
     const order = await UltraClient.getOrder({
       inputMint: inputToken.id,
       outputMint: outputToken.id,

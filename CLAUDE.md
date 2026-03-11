@@ -36,7 +36,7 @@ bun run test
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/use/solana-import`
 - `TokensCommand` — `tokens search`
-- `SwapsCommand` — `swaps quote/execute`
+- `SpotCommand` — `spot quote/swap`
 
 **Libraries** (`src/lib/`):
 
@@ -51,7 +51,7 @@ bun run test
 - `DatapiClient` — Jupiter token data/search API
 - `UltraClient` — Jupiter Ultra swap API (quote + execute)
 
-**Swap flow:** token search → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
+**Spot swap flow:** token search → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
 
 ## Code Style
 
