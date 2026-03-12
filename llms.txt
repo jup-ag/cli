@@ -8,8 +8,8 @@ On failure, commands exit with non-zero code with an error message. In JSON mode
 
 ## Skills
 
-- [Setup](skills/setup.md): Install, configure, and manage keys
-- [Spot Trading](skills/spot.md): Token search, quotes, swaps, transfers, and portfolios
+- [Setup](docs/setup.md): Install, configure, and manage keys
+- [Spot Trading](docs/spot.md): Token search, quotes, swaps, transfers, and portfolios
 - Perps Trading: Perpetual futures (coming soon)
 - Lend: Lending and borrowing (coming soon)
 - Prediction Markets: Create and trade prediction markets (coming soon)
