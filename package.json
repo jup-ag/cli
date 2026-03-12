@@ -6,12 +6,15 @@
     "jup": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist/index.js",
+    "docs",
+    "llms.txt",
+    "README.md"
   ],
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
-    "build:binary": "bun build src/index.ts --compile --outfile dist/jup",
+    "build:binary": "bash scripts/build.sh",
     "typecheck": "bunx tsc --noEmit",
     "lint": "bunx oxlint src",
     "test": "bun test",

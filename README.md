@@ -4,11 +4,17 @@ CLI for interacting with Jupiter's products on Solana: Spot, Perps, Lend, Predic
 
 ## Install
 
+Install via npm:
+
 ```bash
 npm i -g @jup-ag/cli
 ```
 
-Or download a standalone binary from [GitHub Releases](https://github.com/jup-ag/cli/releases).
+Or use the install script to auto-detect the best method:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh | bash
+```
 
 ## Quick start
 
