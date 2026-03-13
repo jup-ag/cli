@@ -5,13 +5,15 @@ on:
     branches: [main]
     paths: [package.json]
 
+permissions:
+  contents: write
+  id-token: write # required for npm provenance
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -30,10 +32,10 @@ jobs:
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@ecf28ddc73e819eb6fa29df6b34ef8921c743461 # v2
         if: steps.version.outputs.changed == 'true'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         if: steps.version.outputs.changed == 'true'
         with:
           registry-url: https://registry.npmjs.org
@@ -54,6 +56,10 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: bun run build
 
+      - name: Generate checksums
+        if: steps.version.outputs.changed == 'true'
+        run: cd dist && sha256sum jup-* > checksums.txt
+
       - name: Create tag
         if: steps.version.outputs.changed == 'true'
         run: |
@@ -62,14 +68,16 @@ jobs:
 
       - name: Create GitHub Release
         if: steps.version.outputs.changed == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          files: dist/jup-*
+          files: |
+            dist/jup-*
+            dist/checksums.txt
           generate_release_notes: true
 
       - name: Publish to npm
         if: steps.version.outputs.changed == 'true'
-        run: npm publish --access public
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
