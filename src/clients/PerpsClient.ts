@@ -192,7 +192,6 @@ export class PerpsClient {
     return NumberConverter.fromChainAmount(amount, Asset.USDC.decimals);
   }
 
-
   public static async getMarkets(): Promise<
     ({ asset: string } & MarketStatsResponse)[]
   > {

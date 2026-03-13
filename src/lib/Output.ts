@@ -1,8 +1,8 @@
 import chalk from "chalk";
 import Table from "cli-table3";
+import { HTTPError } from "ky";
 
 import { Config } from "./Config.ts";
-import { HTTPError } from "ky";
 
 type HorizontalTable = {
   type: "horizontal";

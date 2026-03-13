@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import chalk from "chalk";
+
 import { Output } from "./Output.ts";
 
 describe("formatBoolean", () => {
