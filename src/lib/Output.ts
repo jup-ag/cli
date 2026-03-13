@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import Table from "cli-table3";
+import { HTTPError } from "ky";
 
 import { Config } from "./Config.ts";
 
@@ -28,8 +29,20 @@ export class Output {
     console.log(JSON.stringify(data, null, 2));
   }
 
-  public static error(err: unknown): void {
-    const message = err instanceof Error ? err.message : String(err);
+  public static async error(err: unknown): Promise<void> {
+    let message: string;
+    if (err instanceof HTTPError) {
+      // Best effort to extract message from the response body, which may be JSON or plain text
+      const text = await err.response.text().catch(() => "");
+      try {
+        const json = JSON.parse(text);
+        message = json.message ?? json.error ?? JSON.stringify(json);
+      } catch {
+        message = text || err.message;
+      }
+    } else {
+      message = err instanceof Error ? err.message : String(err);
+    }
     if (this.isJson()) {
       this.json({ error: message });
     } else {

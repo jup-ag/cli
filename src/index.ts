@@ -3,6 +3,7 @@ import { Command } from "commander";
 
 import { ConfigCommand } from "./commands/ConfigCommand.ts";
 import { KeysCommand } from "./commands/KeysCommand.ts";
+import { PerpsCommand } from "./commands/PerpsCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
 
 import { version } from "../package.json";
@@ -29,9 +30,10 @@ program
 
 ConfigCommand.register(program);
 KeysCommand.register(program);
+PerpsCommand.register(program);
 SpotCommand.register(program);
 
-program.parseAsync().catch((err: unknown) => {
-  Output.error(err);
+program.parseAsync().catch(async (err: unknown) => {
+  await Output.error(err);
   process.exit(1);
 });

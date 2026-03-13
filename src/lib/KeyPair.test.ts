@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
 import { getBase58Decoder } from "@solana/kit";
+import { describe, expect, test } from "bun:test";
+
 import { KeyPair } from "./KeyPair.ts";
 
 describe("generate", () => {
