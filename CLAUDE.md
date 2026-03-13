@@ -38,7 +38,7 @@ bun run ci
 **Libraries** (`src/lib/`):
 
 - `Asset` — token metadata (mint addresses, decimals) for SOL, BTC, ETH, USDC; `resolveAsset()` for name lookup
-- `Config` — manages `~/.config/jup/settings.json` (activeKey, output format)
+- `Config` — manages `~/.config/jup/settings.json` (activeKey, output format, API key)
 - `Signer` — loads keypairs from `~/.config/jup/keys/{name}.json`, signs transactions
 - `KeyPair` — generates/recovers keypairs (BIP39 mnemonics, BIP32 derivation)
 - `Output` — renders data as table (via cli-table3) or JSON based on config; also provides display formatters (`formatDollar`, `formatBoolean`, `formatPercentageChange`)

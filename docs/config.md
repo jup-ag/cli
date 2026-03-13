@@ -20,3 +20,14 @@ jup config set --output table
 ```bash
 jup config set --active-key <name>
 ```
+
+## Set API key
+
+Use an API key from <https://portal.jup.ag/> for higher rate limits:
+
+```bash
+jup config set --api-key <key>
+
+# Delete or unset the API key
+jup config set --api-key
+```

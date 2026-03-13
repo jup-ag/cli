@@ -17,6 +17,10 @@ export class ConfigCommand {
       .description("Update settings")
       .option("--active-key <name>", "Set the active key")
       .option("--output <type>", "Set the output format ('table' or 'json')")
+      .option(
+        "--api-key [key]",
+        "Use an API key from https://portal.jup.ag/ for higher rate limits"
+      )
       .action((opts) => this.set(opts));
   }
 
@@ -29,7 +33,7 @@ export class ConfigCommand {
 
     const data = Object.entries(settings).map(([key, value]) => ({
       setting: key,
-      value: String(value),
+      value: value ? String(value) : "",
     }));
     Output.table({
       type: "horizontal",
@@ -41,11 +45,17 @@ export class ConfigCommand {
   private static set(opts: {
     activeKey?: string;
     output?: "table" | "json";
+    apiKey?: string | true;
   }): void {
     if (opts.output && opts.output !== "table" && opts.output !== "json") {
       throw new Error("Invalid --output format. Must be 'table' or 'json'.");
     }
-    Config.set(opts);
+    // --api-key without a value (Commander passes `true`) clears the key
+    const { apiKey, ...rest } = opts;
+    Config.set({
+      ...rest,
+      apiKey: typeof apiKey === "string" ? apiKey : undefined,
+    });
     this.list();
   }
 }

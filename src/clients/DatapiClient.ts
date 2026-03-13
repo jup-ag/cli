@@ -1,5 +1,7 @@
 import ky from "ky";
 
+import { ClientConfig } from "./ClientConfig.ts";
+
 export type SwapStats = {
   priceChange?: number | undefined;
   holderChange?: number | undefined;
@@ -94,16 +96,15 @@ type GetSearchTokensRequest = {
 type GetSearchTokensResponse = Token[];
 
 export class DatapiClient {
-  static readonly #BASE_URL = "https://lite-api.jup.ag/tokens/v2";
+  static readonly #ky = ky.create({
+    prefixUrl: `${ClientConfig.host}/tokens/v2`,
+    headers: ClientConfig.headers,
+    throwHttpErrors: false,
+  });
 
   public static async search(
-    params: GetSearchTokensRequest
+    req: GetSearchTokensRequest
   ): Promise<GetSearchTokensResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/search`, {
-        searchParams: params,
-        throwHttpErrors: false,
-      })
-      .json();
+    return this.#ky.get("search", { searchParams: req }).json();
   }
 }

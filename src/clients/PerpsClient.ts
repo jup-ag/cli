@@ -2,6 +2,7 @@ import ky from "ky";
 
 import { Asset, resolveAsset } from "../lib/Asset.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
+import { ClientConfig } from "./ClientConfig.ts";
 
 export type MarketStatsResponse = {
   price: string;
@@ -182,7 +183,10 @@ export type ExecuteResponse = {
 };
 
 export class PerpsClient {
-  static readonly #BASE_URL = "https://perps-api.jup.ag/v2";
+  static readonly #ky = ky.create({
+    prefixUrl: "https://perps-api.jup.ag/v2",
+    headers: ClientConfig.headers,
+  });
 
   public static toUsdRaw(amount: string): string {
     return NumberConverter.toChainAmount(amount, Asset.USDC.decimals);
@@ -198,8 +202,8 @@ export class PerpsClient {
     return Promise.all(
       ["SOL", "BTC", "ETH"].map(async (asset) => {
         const mint = resolveAsset(asset).id;
-        const stats: MarketStatsResponse = await ky
-          .get(`${this.#BASE_URL}/market-stats`, { searchParams: { mint } })
+        const stats: MarketStatsResponse = await this.#ky
+          .get("market-stats", { searchParams: { mint } })
           .json();
         return { asset, ...stats };
       })
@@ -209,20 +213,16 @@ export class PerpsClient {
   public static async getPositions(
     walletAddress: string
   ): Promise<GetPositionsResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/positions`, {
-        searchParams: { walletAddress },
-      })
+    return this.#ky
+      .get("positions", { searchParams: { walletAddress } })
       .json();
   }
 
   public static async getLimitOrders(
     walletAddress: string
   ): Promise<GetLimitOrdersResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/orders/limit`, {
-        searchParams: { walletAddress },
-      })
+    return this.#ky
+      .get("orders/limit", { searchParams: { walletAddress } })
       .json();
   }
 
@@ -237,9 +237,7 @@ export class PerpsClient {
     walletAddress: string;
     tpsl?: { triggerPrice: string; requestType: string }[];
   }): Promise<IncreasePositionResponse> {
-    return ky
-      .post(`${this.#BASE_URL}/positions/increase`, { json: req })
-      .json();
+    return this.#ky.post("positions/increase", { json: req }).json();
   }
 
   public static async postDecreasePosition(req: {
@@ -249,18 +247,14 @@ export class PerpsClient {
     entirePosition?: boolean;
     maxSlippageBps: string;
   }): Promise<DecreasePositionResponse> {
-    return ky
-      .post(`${this.#BASE_URL}/positions/decrease`, { json: req })
-      .json();
+    return this.#ky.post("positions/decrease", { json: req }).json();
   }
 
   public static async postCloseAll(
     walletAddress: string
   ): Promise<CloseAllResponse> {
-    return ky
-      .post(`${this.#BASE_URL}/positions/close-all`, {
-        json: { walletAddress },
-      })
+    return this.#ky
+      .post("positions/close-all", { json: { walletAddress } })
       .json();
   }
 
@@ -274,23 +268,21 @@ export class PerpsClient {
     sizeUsdDelta?: string;
     walletAddress: string;
   }): Promise<LimitOrderResponse> {
-    return ky.post(`${this.#BASE_URL}/orders/limit`, { json: req }).json();
+    return this.#ky.post("orders/limit", { json: req }).json();
   }
 
   public static async patchLimitOrder(req: {
     positionRequestPubkey: string;
     triggerPrice: string;
   }): Promise<LimitOrderResponse> {
-    return ky.patch(`${this.#BASE_URL}/orders/limit`, { json: req }).json();
+    return this.#ky.patch("orders/limit", { json: req }).json();
   }
 
   public static async deleteLimitOrder(
     positionRequestPubkey: string
   ): Promise<CancelResponse> {
-    return ky
-      .delete(`${this.#BASE_URL}/orders/limit`, {
-        json: { positionRequestPubkey },
-      })
+    return this.#ky
+      .delete("orders/limit", { json: { positionRequestPubkey } })
       .json();
   }
 
@@ -304,32 +296,26 @@ export class PerpsClient {
       entirePosition: boolean;
     }[];
   }): Promise<TpslResponse> {
-    return ky.post(`${this.#BASE_URL}/tpsl`, { json: req }).json();
+    return this.#ky.post("tpsl", { json: req }).json();
   }
 
   public static async patchTpsl(req: {
     positionRequestPubkey: string;
     triggerPrice: string;
   }): Promise<TpslResponse> {
-    return ky.patch(`${this.#BASE_URL}/tpsl`, { json: req }).json();
+    return this.#ky.patch("tpsl", { json: req }).json();
   }
 
   public static async deleteTpsl(
     positionRequestPubkey: string
   ): Promise<CancelResponse> {
-    return ky
-      .delete(`${this.#BASE_URL}/tpsl`, {
-        json: { positionRequestPubkey },
-      })
-      .json();
+    return this.#ky.delete("tpsl", { json: { positionRequestPubkey } }).json();
   }
 
   public static async postExecute(req: {
     action: string;
     serializedTxBase64: string;
   }): Promise<ExecuteResponse> {
-    return ky
-      .post(`${this.#BASE_URL}/transaction/execute`, { json: req })
-      .json();
+    return this.#ky.post("transaction/execute", { json: req }).json();
   }
 }

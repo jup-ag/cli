@@ -1,6 +1,8 @@
 import type { Address, Base64EncodedBytes } from "@solana/kit";
 import ky from "ky";
 
+import { ClientConfig } from "./ClientConfig.ts";
+
 type GetOrderRequest = {
   inputMint: string;
   outputMint: string;
@@ -104,50 +106,36 @@ type PostExecuteTransferResponse = {
 };
 
 export class UltraClient {
-  static readonly #BASE_URL = "https://lite-api.jup.ag/ultra/v1";
-  static readonly #ATTRIBUTION_HEADER = {
-    "x-client-platform": "jupiter.cli",
-  } as const;
+  static readonly #ky = ky.create({
+    prefixUrl: `${ClientConfig.host}/ultra/v1`,
+    headers: ClientConfig.headers,
+  });
 
   public static async getOrder(
     req: GetOrderRequest
   ): Promise<GetOrderResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/order`, {
-        searchParams: req,
-        throwHttpErrors: false,
-        headers: this.#ATTRIBUTION_HEADER,
-      })
+    return this.#ky
+      .get("order", { searchParams: req, throwHttpErrors: false })
       .json();
   }
 
   public static async getHoldings(
     address: string
   ): Promise<GetHoldingsResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/holdings/${address}`, {
-        headers: this.#ATTRIBUTION_HEADER,
-      })
-      .json();
+    return this.#ky.get(`holdings/${address}`).json();
   }
 
   public static async postExecute(req: PostExecuteRequest) {
-    return ky
-      .post<PostExecuteResponse>(`${this.#BASE_URL}/execute`, {
-        json: req,
-        headers: this.#ATTRIBUTION_HEADER,
-      })
-      .json();
+    return this.#ky.post<PostExecuteResponse>("execute", { json: req }).json();
   }
 
   public static async getTransferTokenTx(
     req: GetTransferTokenTxRequest
   ): Promise<GetTransferTxResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/transfer/craft-token`, {
+    return this.#ky
+      .get("transfer/craft-token", {
         searchParams: req,
         throwHttpErrors: false,
-        headers: this.#ATTRIBUTION_HEADER,
       })
       .json();
   }
@@ -155,11 +143,10 @@ export class UltraClient {
   public static async getTransferSolTx(
     req: GetTransferSolTxRequest
   ): Promise<GetTransferTxResponse> {
-    return ky
-      .get(`${this.#BASE_URL}/transfer/craft-native`, {
+    return this.#ky
+      .get("transfer/craft-native", {
         searchParams: req,
         throwHttpErrors: false,
-        headers: this.#ATTRIBUTION_HEADER,
       })
       .json();
   }
@@ -167,11 +154,6 @@ export class UltraClient {
   public static async postExecuteTransfer(
     req: PostExecuteTransferRequest
   ): Promise<PostExecuteTransferResponse> {
-    return ky
-      .post(`${this.#BASE_URL}/transfer/execute`, {
-        json: req,
-        headers: this.#ATTRIBUTION_HEADER,
-      })
-      .json();
+    return this.#ky.post("transfer/execute", { json: req }).json();
   }
 }

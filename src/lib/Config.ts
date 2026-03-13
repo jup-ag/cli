@@ -5,6 +5,7 @@ import { join } from "node:path";
 type Settings = {
   activeKey: "default" | string;
   output: "table" | "json";
+  apiKey?: string | undefined;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +40,7 @@ export class Config {
         raw.output === "table" || raw.output === "json"
           ? raw.output
           : DEFAULT_SETTINGS.output,
+      apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
     };
   }
 
@@ -54,6 +56,9 @@ export class Config {
   }
 
   public static save(settings: Settings): void {
-    writeFileSync(this.SETTINGS_FILE, JSON.stringify(settings, null, 2) + "\n");
+    // Strip undefined optional fields so settings.json stays clean
+    const { apiKey, ...rest } = settings;
+    const out = apiKey ? { ...rest, apiKey } : rest;
+    writeFileSync(this.SETTINGS_FILE, JSON.stringify(out, null, 2) + "\n");
   }
 }
