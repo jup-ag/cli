@@ -32,6 +32,7 @@ bun run ci
 
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
+- `PerpsCommand` — `perps positions/markets/open/set/close`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer`
 
 **Libraries** (`src/lib/`):

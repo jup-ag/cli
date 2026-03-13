@@ -8,7 +8,7 @@ import {
   type HoldingsTokenAccount,
 } from "../clients/UltraClient.ts";
 import { Config } from "../lib/Config.ts";
-import { Mint } from "../lib/Mint.ts";
+import { Asset } from "../lib/Asset.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
@@ -268,7 +268,7 @@ export class SpotCommand {
     }
     const networkFee = NumberConverter.fromChainAmount(
       networkFeeLamports.toString(),
-      9
+      Asset.SOL.decimals
     );
 
     if (Output.isJson()) {
@@ -334,7 +334,7 @@ export class SpotCommand {
       opts.address ??
       (await Signer.load(opts.key ?? Config.load().activeKey)).address;
 
-    const SOL_DECIMALS = 9;
+    const SOL_DECIMALS = Asset.SOL.decimals;
 
     const raw = await UltraClient.getHoldings(address);
 
@@ -349,8 +349,8 @@ export class SpotCommand {
 
     // Resolve all token info via Datapi
     const allMints = [...ataByMint.keys()];
-    if (!ataByMint.has(Mint.WSOL)) {
-      allMints.push(Mint.WSOL);
+    if (!ataByMint.has(Asset.SOL.id)) {
+      allMints.push(Asset.SOL.id);
     }
 
     const BATCH_SIZE = 100;
@@ -387,16 +387,16 @@ export class SpotCommand {
     }[] = [];
 
     // Add combined SOL/WSOL entry
-    const wsolInfo = tokenMap.get(Mint.WSOL);
+    const wsolInfo = tokenMap.get(Asset.SOL.id);
     const solLamports = BigInt(raw.amount);
-    const wsolLamports = BigInt(ataByMint.get(Mint.WSOL)?.amount ?? "0");
+    const wsolLamports = BigInt(ataByMint.get(Asset.SOL.id)?.amount ?? "0");
     const combinedSolLamports = solLamports + wsolLamports;
     if (wsolInfo && combinedSolLamports > 0n) {
       const amount = Number(
         NumberConverter.fromChainAmount(combinedSolLamports, SOL_DECIMALS)
       );
       outputTokens.push({
-        id: Mint.WSOL,
+        id: Asset.SOL.id,
         symbol: wsolInfo.symbol,
         decimals: SOL_DECIMALS,
         amount,
@@ -409,7 +409,7 @@ export class SpotCommand {
     }
 
     for (const [mint, ata] of ataByMint) {
-      if (mint === Mint.WSOL) {
+      if (mint === Asset.SOL.id) {
         continue;
       }
       const info = tokenMap.get(mint);
@@ -491,7 +491,7 @@ export class SpotCommand {
       NumberConverter.toChainAmount(opts.amount!, token.decimals, multiplier);
 
     let txResponse;
-    if (token.id === Mint.WSOL) {
+    if (token.id === Asset.SOL.id) {
       txResponse = await UltraClient.getTransferSolTx({
         senderAddress: signer.address as Address,
         receiverAddress: opts.to as Address,
@@ -552,7 +552,7 @@ export class SpotCommand {
 
     const networkFee = NumberConverter.fromChainAmount(
       txResponse.feeAmount.toString(),
-      9
+      Asset.SOL.decimals
     );
 
     Output.table({
