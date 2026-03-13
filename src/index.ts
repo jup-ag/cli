@@ -6,6 +6,7 @@ import { KeysCommand } from "./commands/KeysCommand.ts";
 import { PerpsCommand } from "./commands/PerpsCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
 
+import { version } from "../package.json";
 import { Config } from "./lib/Config.ts";
 import { Output } from "./lib/Output.ts";
 
@@ -15,7 +16,7 @@ const program = new Command();
 program
   .name("jup")
   .description("Jupiter CLI for agentic workflows")
-  .version("0.1.0")
+  .version(version)
   .option("-f, --format <type>", "Output format ('table' or 'json')")
   .hook("preAction", (thisCommand) => {
     const opts = thisCommand.opts();
