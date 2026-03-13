@@ -33,6 +33,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         if: steps.version.outputs.changed == 'true'
 
+      - uses: actions/setup-node@v4
+        if: steps.version.outputs.changed == 'true'
+        with:
+          registry-url: https://registry.npmjs.org
+
       - name: Install dependencies
         if: steps.version.outputs.changed == 'true'
         run: bun install --frozen-lockfile
