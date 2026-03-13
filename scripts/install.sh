@@ -44,8 +44,21 @@ ASSET="${BINARY}-${os}-${arch}"
 INSTALL_DIR="${JUP_INSTALL_DIR:-/usr/local/bin}"
 URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
+CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/checksums.txt"
+
 info "Downloading $URL..."
 curl -fsSL "$URL" -o "/tmp/${BINARY}"
+curl -fsSL "$CHECKSUM_URL" -o "/tmp/checksums.txt"
+
+info "Verifying checksum..."
+EXPECTED=$(grep "$ASSET" /tmp/checksums.txt | awk '{print $1}')
+ACTUAL=$(sha256sum "/tmp/${BINARY}" | awk '{print $1}')
+if [ "$EXPECTED" != "$ACTUAL" ]; then
+  rm -f "/tmp/${BINARY}" "/tmp/checksums.txt"
+  error "Checksum verification failed. Expected $EXPECTED, got $ACTUAL"
+fi
+rm -f /tmp/checksums.txt
+
 chmod +x "/tmp/${BINARY}"
 
 if [ -w "$INSTALL_DIR" ]; then
