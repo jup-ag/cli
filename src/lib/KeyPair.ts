@@ -7,6 +7,7 @@ import {
   getBase58Encoder,
   getBase64Encoder,
 } from "@solana/kit";
+import slip10 from "micro-key-producer/slip10.js";
 
 export class KeyPair {
   public readonly privateKey: Uint8Array;
@@ -29,9 +30,20 @@ export class KeyPair {
     };
   }
 
-  public static async fromSeedPhrase(phrase: string): Promise<KeyPair> {
+  public static async fromSeedPhrase(
+    phrase: string,
+    derivationPath: string = "m/44'/501'/0'/0'"
+  ): Promise<KeyPair> {
     const seed = mnemonicToSeedSync(phrase);
-    const hd = HDKey.fromMasterSeed(seed).derive("m/44'/501'/0'/0'");
+    const useBip32 = derivationPath
+      .split("/")
+      .slice(1)
+      .some((seg) => !seg.endsWith("'"));
+    const hd = useBip32
+      ? // Use BIP32 for paths with any non-hardened segments (e.g. m/44'/501'/0'/0/0)
+        HDKey.fromMasterSeed(seed).derive(derivationPath)
+      : // Use SLIP10 for all-hardened paths (e.g. m/44'/501'/0'/0')
+        slip10.fromMasterSeed(seed).derive(derivationPath);
     if (!hd.privateKey) {
       throw new Error("Failed to derive private key");
     }

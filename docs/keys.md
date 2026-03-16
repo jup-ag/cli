@@ -4,27 +4,27 @@ A key is required for signing transactions (swaps, transfers). Keys are stored l
 
 ## Commands
 
-### Generate a new key
+### Add a new key
+
+Generate a new key:
 
 ```bash
 jup keys add <name>
 ```
 
-### Import a Solana CLI keypair
+Import from a JSON file generated via `solana-keygen`:
 
 ```bash
-jup keys solana-import
-jup keys solana-import --name mykey --path ~/.config/solana/id.json
+jup keys add <name> --file /path/to/solana-keygen.json
 ```
 
-### Recover from seed phrase or private key
+Import from private key or seed phrase:
 
 ```bash
-jup keys add <name> --recover --seed-phrase "word1 word2 ..."
-jup keys add <name> --recover --private-key <key>
+jup keys add <name> --seed-phrase "word1 word2 ..."
+jup keys add <name> --seed-phrase "word1 word2 ..." --derivation-path "m/44'/501'/0'/0'" # optional, defaults to "m/44'/501'/0'/0'"
+jup keys add <name> --private-key <key> # accepts hex, base58, base64, or a JSON byte array
 ```
-
-`--private-key` accepts hex, base58, base64, or a JSON byte array.
 
 ### List keys
 
@@ -36,7 +36,7 @@ jup keys list
 // Example JSON response:
 [
   {
-    "name": "default",
+    "name": "key1",
     "address": "ABC1...xyz", // Solana wallet address
     "active": true // if true, key is used by default for signing transactions
   }
@@ -54,6 +54,7 @@ jup keys use <name>
 ```bash
 jup keys edit <name> --name <new-name>
 jup keys edit <name> --seed-phrase "word1 word2 ..."
+jup keys edit <name> --seed-phrase "word1 word2 ..." --derivation-path "m/44'/501'/0'/0'" # optional, defaults to "m/44'/501'/0'/0'"
 jup keys edit <name> --private-key <key>
 ```
 

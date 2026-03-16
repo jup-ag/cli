@@ -19,10 +19,14 @@ curl -fsSL https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh 
 ## Quick Start
 
 ```bash
-# Generate a new key called 'default'
-jup keys add default
-# Or import an existing Solana CLI keypair
-jup keys solana-import
+# Generate a new private key called 'key1'
+jup keys add key1
+# Or import from a JSON file generated via `solana-keygen`
+jup keys add key1 --file /path/to/solana-keygen.json
+# Or import from a seed phrase
+jup keys add key1 --seed-phrase "word1 word2 ..." --derivation-path "m/44'/501'/0'/0'" # optional, defaults to "m/44'/501'/0'/0'"
+# Or import from a private key (accepts hex, base58, base64, or JSON byte array)
+jup keys add key1 --private-key <key>
 
 # View your spot portfolio
 jup spot portfolio

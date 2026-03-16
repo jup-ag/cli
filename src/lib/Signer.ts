@@ -30,8 +30,13 @@ export class Signer {
     return new Signer(signer, keyPair);
   }
 
-  public static async fromSeedPhrase(phrase: string): Promise<Signer> {
-    return this.fromKeyPair(await KeyPair.fromSeedPhrase(phrase));
+  public static async fromSeedPhrase(
+    phrase: string,
+    derivationPath?: string
+  ): Promise<Signer> {
+    return this.fromKeyPair(
+      await KeyPair.fromSeedPhrase(phrase, derivationPath)
+    );
   }
 
   public static async fromPrivateKey(key: string): Promise<Signer> {

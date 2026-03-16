@@ -34,7 +34,8 @@
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
-    "ky": "^1.14.3"
+    "ky": "^1.14.3",
+    "micro-key-producer": "^0.8.5"
   },
   "devDependencies": {
     "@types/bun": "latest",

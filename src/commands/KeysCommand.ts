@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import {
   copyFileSync,
   existsSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -21,12 +22,20 @@ export class KeysCommand {
       .description("List all keys")
       .action(() => this.list());
     keys
-      .command("add [name]")
-      .description("Generate or recover a keypair")
+      .command("add <name>")
+      .description("Generate or import a keypair")
       .option("--overwrite", "Overwrite existing key")
-      .option("--recover", "Recover from seed phrase or private key")
-      .option("--seed-phrase <phrase>", "Seed phrase for recovery")
-      .option("--private-key <key>", "Private key (base58) for recovery")
+      .option("--file <path>", "Import from a JSON file")
+      .option("--seed-phrase <phrase>", "Import from seed phrase")
+      .option(
+        "--derivation-path <path>",
+        "Derivation path for seed phrase",
+        "m/44'/501'/0'/0'"
+      )
+      .option(
+        "--private-key <key>",
+        "Import from private key (hex, base58, base64, or JSON byte array)"
+      )
       .action((name, opts) => this.add(name, opts));
     keys
       .command("delete <name>")
@@ -37,6 +46,11 @@ export class KeysCommand {
       .description("Edit a key's name or credentials")
       .option("--name <new-name>", "Rename the key")
       .option("--seed-phrase <phrase>", "Replace key with new seed phrase")
+      .option(
+        "--derivation-path <path>",
+        "Derivation path for seed phrase",
+        "m/44'/501'/0'/0'"
+      )
       .option("--private-key <key>", "Replace key with new private key")
       .action((name, opts) => this.edit(name, opts));
     keys
@@ -89,31 +103,42 @@ export class KeysCommand {
   }
 
   private static async add(
-    name: string = "default",
+    name: string,
     opts: {
       overwrite?: boolean;
-      recover?: boolean;
+      file?: string;
       seedPhrase?: string;
+      derivationPath?: string;
       privateKey?: string;
     } = {}
   ): Promise<void> {
     const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-
     if (existsSync(keyPath) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
     }
 
+    const importModes = [opts.file, opts.seedPhrase, opts.privateKey].filter(
+      Boolean
+    );
+    if (importModes.length > 1) {
+      throw new Error(
+        "--file, --seed-phrase, and --private-key are mutually exclusive."
+      );
+    }
+
     let signer: Signer;
-    if (opts.recover) {
-      if (opts.seedPhrase) {
-        signer = await Signer.fromSeedPhrase(opts.seedPhrase);
-      } else if (opts.privateKey) {
-        signer = await Signer.fromPrivateKey(opts.privateKey);
-      } else {
-        throw new Error("--recover requires --seed-phrase or --private-key");
-      }
+    if (opts.file) {
+      const file = readFileSync(opts.file, "utf-8");
+      signer = await Signer.fromPrivateKey(file);
+    } else if (opts.seedPhrase) {
+      signer = await Signer.fromSeedPhrase(
+        opts.seedPhrase,
+        opts.derivationPath
+      );
+    } else if (opts.privateKey) {
+      signer = await Signer.fromPrivateKey(opts.privateKey);
     } else {
       signer = await Signer.generate();
     }
@@ -136,6 +161,7 @@ export class KeysCommand {
     opts: {
       name?: string;
       seedPhrase?: string;
+      derivationPath?: string;
       privateKey?: string;
     } = {}
   ): Promise<void> {
@@ -157,7 +183,7 @@ export class KeysCommand {
 
     if (opts.seedPhrase || opts.privateKey) {
       const signer = opts.seedPhrase
-        ? await Signer.fromSeedPhrase(opts.seedPhrase)
+        ? await Signer.fromSeedPhrase(opts.seedPhrase, opts.derivationPath)
         : await Signer.fromPrivateKey(opts.privateKey!);
       signer.save(name);
     }
