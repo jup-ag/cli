@@ -16,7 +16,7 @@ Or use the install script to auto-detect the best method:
 curl -fsSL https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh | bash
 ```
 
-## Quick start
+## Quick Start
 
 ```bash
 # Generate a new key called 'default'
@@ -37,6 +37,9 @@ jup perps positions
 
 ## Docs
 
+> [!NOTE]
+> This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses `jup config set --output json`, or use `-f json` flag on individual commands.
+
 See the [`/docs`](./docs/) directory for specific guides and workflows:
 
 - [Setup](docs/setup.md): Installation of the CLI
@@ -44,5 +47,3 @@ See the [`/docs`](./docs/) directory for specific guides and workflows:
 - [Keys](docs/keys.md): Private key management
 - [Spot](docs/spot.md): Spot trading, transfers, token and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
-
-> This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode for structured responses: `jup config set --output json`.

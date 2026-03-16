@@ -2,20 +2,22 @@
 
 A key is required for signing transactions (swaps, transfers). Keys are stored locally at `~/.config/jup/keys/`.
 
-## Generate a new key
+## Commands
+
+### Generate a new key
 
 ```bash
 jup keys add <name>
 ```
 
-## Import a Solana CLI keypair
+### Import a Solana CLI keypair
 
 ```bash
 jup keys solana-import
 jup keys solana-import --name mykey --path ~/.config/solana/id.json
 ```
 
-## Recover from seed phrase or private key
+### Recover from seed phrase or private key
 
 ```bash
 jup keys add <name> --recover --seed-phrase "word1 word2 ..."
@@ -24,7 +26,7 @@ jup keys add <name> --recover --private-key <key>
 
 `--private-key` accepts hex, base58, base64, or a JSON byte array.
 
-## List keys
+### List keys
 
 ```bash
 jup keys list
@@ -41,13 +43,13 @@ jup keys list
 ]
 ```
 
-## Set the active key
+### Set the active key
 
 ```bash
 jup keys use <name>
 ```
 
-## Edit a key
+### Edit a key
 
 ```bash
 jup keys edit <name> --name <new-name>
@@ -57,7 +59,7 @@ jup keys edit <name> --private-key <key>
 
 Rename a key and/or replace its credentials. Options can be combined. `--seed-phrase` and `--private-key` are mutually exclusive.
 
-## Delete a key
+### Delete a key
 
 ```bash
 jup keys delete <name>
