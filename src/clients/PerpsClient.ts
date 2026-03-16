@@ -85,6 +85,42 @@ export type GetLimitOrdersResponse = {
   dataList: LimitOrder[];
 };
 
+export type Trade = {
+  action: "Increase" | "Decrease";
+  collateralUsdDelta: string;
+  createdTime: number;
+  baseFee: string;
+  borrowFee: string;
+  liquidationFee: string;
+  priceImpactFee: string;
+  fee: string;
+  integratorFeeTokenAmount: string;
+  integratorFeeTokenMint: string | null;
+  mint: string;
+  orderType: string;
+  owner: string;
+  pnl: string | null;
+  pnlPercentage: string | null;
+  positionName: string;
+  positionPubkey: string;
+  price: string;
+  side: "long" | "short";
+  size: string;
+  transactionFeeLamports: string;
+  priorityFeeLamports: string;
+  swapFeeBps: string | null;
+  swapFeeUsd: string | null;
+  swapFeeTokenAmount: string | null;
+  swapFeeTokenMint: string | null;
+  txHash: string;
+  updatedTime: number;
+};
+
+export type GetTradesResponse = {
+  count: number;
+  dataList: Trade[];
+};
+
 export type TxMetadata = {
   blockhash: string;
   lastValidBlockHeight: string;
@@ -238,6 +274,43 @@ export class PerpsClient {
     return this.#ky
       .get("orders/limit", { searchParams: { walletAddress } })
       .json();
+  }
+
+  public static async getTrades(params: {
+    walletAddress: string;
+    action?: string;
+    mint?: string;
+    side?: string;
+    start?: number;
+    end?: number;
+    createdAtAfter?: string;
+    createdAtBefore?: string;
+  }): Promise<GetTradesResponse> {
+    const searchParams: Record<string, string | number> = {
+      walletAddress: params.walletAddress,
+    };
+    if (params.action) {
+      searchParams.action = params.action;
+    }
+    if (params.mint) {
+      searchParams.mint = params.mint;
+    }
+    if (params.side) {
+      searchParams.side = params.side;
+    }
+    if (params.start !== undefined) {
+      searchParams.start = params.start;
+    }
+    if (params.end !== undefined) {
+      searchParams.end = params.end;
+    }
+    if (params.createdAtAfter) {
+      searchParams.createdAtAfter = params.createdAtAfter;
+    }
+    if (params.createdAtBefore) {
+      searchParams.createdAtBefore = params.createdAtBefore;
+    }
+    return this.#ky.get("trades", { searchParams }).json();
   }
 
   public static async postIncreasePosition(req: {

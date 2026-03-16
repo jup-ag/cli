@@ -83,7 +83,7 @@ export class Output {
 
   public static formatPercentageChange(value: number | undefined): string {
     if (value === undefined || value === null) {
-      return "\u2014";
+      return chalk.gray("\u2014");
     }
     const formatted = `${value >= 0 ? "+" : ""}${value.toLocaleString("en-US", {
       minimumFractionDigits: 2,
@@ -98,10 +98,22 @@ export class Output {
     return chalk.gray(formatted);
   }
 
-  public static formatDollar(amount: number | undefined): string {
+  public static formatDollar(
+    amount: number | undefined,
+    opts?: { decimals?: number }
+  ): string {
     if (!amount) {
       // em-dash to indicate nullish or zero values, since $0.00 can be misleading
       return chalk.gray("\u2014");
+    }
+
+    if (opts?.decimals !== undefined) {
+      return amount.toLocaleString("en-US", {
+        currency: "USD",
+        style: "currency",
+        minimumFractionDigits: opts.decimals,
+        maximumFractionDigits: opts.decimals,
+      });
     }
 
     if (amount < 1000) {
@@ -117,5 +129,18 @@ export class Output {
       currency: "USD",
       style: "currency",
     });
+  }
+
+  public static formatDollarChange(amount: number | undefined): string {
+    if (amount === undefined || amount === null || amount === 0) {
+      return chalk.gray("\u2014");
+    }
+    const sign = amount > 0 ? "+" : "\u2212";
+    const formatted = this.formatDollar(Math.abs(amount), { decimals: 2 });
+    const text = `${sign}${formatted}`;
+    if (amount > 0) {
+      return chalk.green(text);
+    }
+    return chalk.red(text);
   }
 }

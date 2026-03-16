@@ -66,6 +66,21 @@ export class PerpsCommand {
       .option("--slippage <bps>", "Max slippage in basis points", "200")
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.close(opts));
+    perps
+      .command("history")
+      .description("View past trading activity")
+      .option("--key <name>", "Key to use (overrides active key)")
+      .option("--address <address>", "Wallet address to look up")
+      .option("--asset <asset>", "Filter by asset (SOL, BTC, ETH)")
+      .option("--side <side>", "Filter by side (long, short)")
+      .option("--action <action>", "Filter by action (Increase, Decrease)")
+      .option("--after <date>", "Show trades after this date or UNIX timestamp")
+      .option(
+        "--before <date>",
+        "Show trades before this date or UNIX timestamp"
+      )
+      .option("--limit <n>", "Max number of results", "20")
+      .action((opts) => this.history(opts));
   }
 
   private static async signAndExecute(
@@ -370,7 +385,7 @@ export class PerpsCommand {
             ),
           },
           { label: "Leverage", value: `${res.quote.leverage}x` },
-          { label: "Tx", value: result.txid },
+          { label: "Tx Signature", value: result.txid },
         ],
       });
     } else {
@@ -464,7 +479,7 @@ export class PerpsCommand {
               Number(PerpsClient.fromUsdRaw(res.quote.openFeeUsd))
             ),
           },
-          { label: "Tx", value: result.txid },
+          { label: "Tx Signature", value: result.txid },
         ],
       });
     }
@@ -527,7 +542,7 @@ export class PerpsCommand {
             label: "New Trigger Price",
             value: Output.formatDollar(Number(opts.limit)),
           },
-          { label: "Tx", value: result.txid },
+          { label: "Tx Signature", value: result.txid },
         ],
       });
       return;
@@ -785,8 +800,132 @@ export class PerpsCommand {
             Number(PerpsClient.fromUsdRaw(res.quote.totalFeeUsd))
           ),
         },
-        { label: "Tx", value: result.txid },
+        { label: "Tx Signature", value: result.txid },
       ],
     });
+  }
+
+  private static parseTimestamp(value: string): string {
+    if (/^\d+$/.test(value)) {
+      return value;
+    }
+    const ms = new Date(value).getTime();
+    if (isNaN(ms)) {
+      throw new Error(`Invalid date: ${value}`);
+    }
+    return String(Math.floor(ms / 1000));
+  }
+
+  private static async history(opts: {
+    key?: string;
+    address?: string;
+    asset?: string;
+    side?: string;
+    action?: string;
+    after?: string;
+    before?: string;
+    limit: string;
+  }): Promise<void> {
+    if (opts.address && opts.key) {
+      throw new Error("Only one of --address or --key can be provided.");
+    }
+
+    const limit = Number(opts.limit);
+    if (isNaN(limit) || limit < 1) {
+      throw new Error("--limit must be a positive number.");
+    }
+    if (
+      opts.action &&
+      opts.action !== "Increase" &&
+      opts.action !== "Decrease"
+    ) {
+      throw new Error("--action must be 'Increase' or 'Decrease'.");
+    }
+    if (opts.side && opts.side !== "long" && opts.side !== "short") {
+      throw new Error("--side must be 'long' or 'short'.");
+    }
+
+    const address =
+      opts.address ??
+      (await Signer.load(opts.key ?? Config.load().activeKey)).address;
+    const mint = opts.asset ? resolveAsset(opts.asset).id : undefined;
+
+    const res = await PerpsClient.getTrades({
+      walletAddress: address,
+      action: opts.action,
+      mint,
+      side: opts.side,
+      start: 0,
+      end: limit,
+      createdAtAfter: opts.after ? this.parseTimestamp(opts.after) : undefined,
+      createdAtBefore: opts.before
+        ? this.parseTimestamp(opts.before)
+        : undefined,
+    });
+
+    const mintToName = new Map<string, string>(
+      Object.entries(Asset).map(([name, a]) => [a.id, name])
+    );
+    if (Output.isJson()) {
+      Output.json({
+        count: res.count,
+        trades: res.dataList.map((t) => ({
+          time: new Date(t.createdTime * 1000).toISOString(),
+          asset: mintToName.get(t.mint) ?? t.mint,
+          side: t.side,
+          action: t.action,
+          sizeUsd: Number(t.size),
+          priceUsd: Number(t.price),
+          pnlUsd: t.pnl ? Number(t.pnl) : null,
+          pnlPct: t.pnlPercentage ? Number(t.pnlPercentage) : null,
+          feeUsd: Number(t.fee),
+          signature: t.txHash,
+        })),
+      });
+      return;
+    }
+
+    if (res.dataList.length === 0) {
+      console.log("\nNo trade history found.");
+      return;
+    }
+
+    Output.table({
+      type: "horizontal",
+      headers: {
+        time: "Time",
+        asset: "Asset",
+        side: "Side",
+        action: "Action",
+        size: "Size",
+        price: "Price",
+        pnl: "PnL",
+        fee: "Fee",
+        txHash: "Tx Signature",
+      },
+      rows: res.dataList.map((t) => {
+        const sideColor = t.side === "long" ? chalk.green.bold : chalk.red.bold;
+        return {
+          time: new Date(t.createdTime * 1000).toLocaleString(),
+          asset: mintToName.get(t.mint) ?? t.mint.slice(0, 8) + "...",
+          side: sideColor(t.side),
+          action: t.action,
+          size: Output.formatDollar(Number(t.size), { decimals: 2 }),
+          price: Output.formatDollar(Number(t.price), { decimals: 2 }),
+          pnl:
+            t.pnl && t.pnlPercentage
+              ? `${Output.formatDollarChange(Number(t.pnl))} (${Output.formatPercentageChange(Number(t.pnlPercentage))})`
+              : chalk.gray("\u2014"),
+          fee: Output.formatDollar(Number(t.fee), { decimals: 2 }),
+          txHash: t.txHash,
+        };
+      }),
+    });
+
+    if (res.count > limit) {
+      console.log(
+        `\nShowing ${res.dataList.length} of ${res.count} trades. Use --limit to see more.`
+      );
+    }
   }
 }

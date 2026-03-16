@@ -19,7 +19,7 @@ describe("formatBoolean", () => {
 
 describe("formatPercentageChange", () => {
   test("undefined returns em-dash", () => {
-    expect(Output.formatPercentageChange(undefined)).toBe("\u2014");
+    expect(Output.formatPercentageChange(undefined)).toBe(chalk.gray("\u2014"));
   });
 
   test("zero shows gray with plus prefix", () => {
