@@ -8,6 +8,7 @@ type GetOrderRequest = {
   outputMint: string;
   amount: string;
   taker?: string | undefined;
+  slippageBps?: number | undefined;
 };
 
 export type GetOrderResponse = {

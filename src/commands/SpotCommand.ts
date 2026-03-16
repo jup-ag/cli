@@ -48,6 +48,7 @@ export class SpotCommand {
         "--raw-amount <n>",
         "Amount in on-chain units (no decimal conversion)"
       )
+      .option("--slippage <bps>", "Max slippage in basis points", "30")
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.swap(opts));
     spot
@@ -200,9 +201,15 @@ export class SpotCommand {
     to: string;
     amount?: string;
     rawAmount?: string;
+    slippage?: string;
     key?: string;
   }): Promise<void> {
     this.validateAmountOpts(opts);
+
+    const slippageBps = Number(opts.slippage ?? "30");
+    if (isNaN(slippageBps) || slippageBps < 0 || slippageBps > 10000) {
+      throw new Error("--slippage must be 0-10000 (basis points)");
+    }
 
     const settings = Config.load();
     const [signer, inputToken, outputToken] = await Promise.all([
@@ -224,6 +231,7 @@ export class SpotCommand {
           inputMultiplier
         ),
       taker: signer.address,
+      slippageBps,
     });
 
     if (order.error) {

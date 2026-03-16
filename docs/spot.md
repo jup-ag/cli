@@ -51,8 +51,10 @@ jup spot quote --from <mint> --to <mint> --raw-amount 1000000000
 ```bash
 jup spot swap --from SOL --to USDC --amount 1
 jup spot swap --from SOL --to USDC --amount 1 --key mykey
+jup spot swap --from SOL --to USDC --amount 1 --slippage 100
 ```
 
+- `--slippage <bps>` max slippage in basis points (default: 30 = 0.3%)
 - `--key` overrides the active key for this transaction
 
 ```js
