@@ -2,6 +2,9 @@
 
 CLI for interacting with Jupiter's products on Solana: Spot, Perps, Lend, Prediction Markets and more.
 
+> [!WARNING]
+> This project is pre-v1 (early alpha) and should be considered unstable. Breaking changes may be introduced without warning. Please reach out to the team if you'd like to use or contribute to the CLI.
+
 ## Install
 
 Install via npm:
@@ -42,12 +45,16 @@ jup perps positions
 ## Docs
 
 > [!NOTE]
-> This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses `jup config set --output json`, or use `-f json` flag on individual commands.
+> This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses: `jup config set --output json`, or use `-f json` flag on individual commands.
 
-See the [`/docs`](./docs/) directory for specific guides and workflows:
+[Read the docs](./docs/) for specific guides, examples, and workflows:
 
 - [Setup](docs/setup.md): Installation of the CLI
 - [Config](docs/config.md): CLI settings and configurations
 - [Keys](docs/keys.md): Private key management
-- [Spot](docs/spot.md): Spot trading, transfers, token and portfolio data
+- [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for a detailed release history.

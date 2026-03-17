@@ -34,5 +34,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 # Claude Code
-.claude
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/release/
 plans
