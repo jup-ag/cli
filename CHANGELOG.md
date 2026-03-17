@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.3.0
+
+### Features
+
+- Add `spot history` command with token and date range filters (27a79a0)
+
+### Improvements
+
+- Use Node LTS for npm OIDC trusted publishing (8f66a47)
+- Add changelog and release skill (06beeda)
+
 ## v0.2.2
 
 ### Features
