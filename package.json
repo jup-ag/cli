@@ -2,6 +2,10 @@
   "name": "@jup-ag/cli",
   "version": "0.2.2",
   "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jup-ag/cli.git"
+  },
   "type": "module",
   "bin": {
     "jup": "dist/index.js"
