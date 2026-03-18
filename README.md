@@ -40,6 +40,13 @@ jup spot swap --from SOL --to USDC --amount 1
 jup perps open --asset SOL --side long --amount 10 --input USDC --leverage 3
 # View your perps positions
 jup perps positions
+
+# View lending tokens and APY
+jup lend earn tokens
+# Deposit 100 USDC into lending
+jup lend earn deposit --token USDC --amount 100
+# View your lending positions
+jup lend earn positions
 ```
 
 ## Docs
@@ -54,6 +61,7 @@ jup perps positions
 - [Keys](docs/keys.md): Private key management
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
+- [Lend](docs/lend.md): Lending and yield farming
 
 ## Changelog
 

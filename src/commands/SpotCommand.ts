@@ -17,6 +17,7 @@ import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import { Swap } from "../lib/Swap.ts";
 
 export class SpotCommand {
   public static register(program: Command): void {
@@ -139,14 +140,14 @@ export class SpotCommand {
     amount?: string;
     rawAmount?: string;
   }): Promise<void> {
-    this.validateAmountOpts(opts);
+    Swap.validateAmountOpts(opts);
 
     const [inputToken, outputToken] = await Promise.all([
-      this.resolveToken(opts.from),
-      this.resolveToken(opts.to),
+      DatapiClient.resolveToken(opts.from),
+      DatapiClient.resolveToken(opts.to),
     ]);
-    const inputMultiplier = this.getScaledUiMultiplier(inputToken);
-    const outputMultiplier = this.getScaledUiMultiplier(outputToken);
+    const inputMultiplier = Swap.getScaledUiMultiplier(inputToken);
+    const outputMultiplier = Swap.getScaledUiMultiplier(outputToken);
 
     const order = await UltraClient.getOrder({
       inputMint: inputToken.id,
@@ -221,79 +222,32 @@ export class SpotCommand {
     rawAmount?: string;
     key?: string;
   }): Promise<void> {
-    this.validateAmountOpts(opts);
+    Swap.validateAmountOpts(opts);
 
     const settings = Config.load();
     const [signer, inputToken, outputToken] = await Promise.all([
       Signer.load(opts.key ?? settings.activeKey),
-      this.resolveToken(opts.from),
-      this.resolveToken(opts.to),
+      DatapiClient.resolveToken(opts.from),
+      DatapiClient.resolveToken(opts.to),
     ]);
-    const inputMultiplier = this.getScaledUiMultiplier(inputToken);
-    const outputMultiplier = this.getScaledUiMultiplier(outputToken);
 
-    const order = await UltraClient.getOrder({
-      inputMint: inputToken.id,
-      outputMint: outputToken.id,
-      amount:
-        opts.rawAmount ??
-        NumberConverter.toChainAmount(
-          opts.amount!,
-          inputToken.decimals,
-          inputMultiplier
-        ),
-      taker: signer.address,
+    const swap = await Swap.execute({
+      signer,
+      inputToken,
+      outputToken,
+      amount: opts.amount,
+      rawAmount: opts.rawAmount,
     });
 
-    if (order.error) {
-      throw new Error(order.errorMessage ?? order.error);
-    }
-    if (!order.transaction) {
-      throw new Error("No valid routes found.");
-    }
-
-    const signedTx = await signer.signTransaction(order.transaction);
-    const result = await UltraClient.postExecute({
-      requestId: order.requestId,
-      signedTransaction: signedTx,
-    });
-
-    const inAmount = NumberConverter.fromChainAmount(
-      result.inputAmountResult,
-      inputToken.decimals,
-      inputMultiplier
-    );
-    const outAmount = NumberConverter.fromChainAmount(
-      result.outputAmountResult,
-      outputToken.decimals,
-      outputMultiplier
-    );
-
-    let networkFeeLamports = 0;
-    if (
-      order.prioritizationFeePayer === signer.address &&
-      order.prioritizationFeeLamports
-    ) {
-      networkFeeLamports = order.prioritizationFeeLamports;
-    }
-    if (order.rentFeePayer === signer.address && order.rentFeeLamports) {
-      networkFeeLamports += order.rentFeeLamports;
-    }
-    if (
-      order.signatureFeePayer === signer.address &&
-      order.signatureFeeLamports
-    ) {
-      networkFeeLamports += order.signatureFeeLamports;
-    }
     const networkFee = NumberConverter.fromChainAmount(
-      networkFeeLamports.toString(),
+      swap.networkFeeLamports.toString(),
       Asset.SOL.decimals
     );
 
     if (Output.isJson()) {
       Output.json({
         trader: signer.address,
-        signature: result.signature,
+        signature: swap.result.signature,
         inputToken: {
           id: inputToken.id,
           symbol: inputToken.symbol,
@@ -304,12 +258,12 @@ export class SpotCommand {
           symbol: outputToken.symbol,
           decimals: outputToken.decimals,
         },
-        inAmount,
-        outAmount,
-        inUsdValue: order.inUsdValue,
-        outUsdValue: order.outUsdValue,
-        priceImpact: order.priceImpact,
-        networkFeeLamports,
+        inAmount: swap.inAmount,
+        outAmount: swap.outAmount,
+        inUsdValue: swap.order.inUsdValue,
+        outUsdValue: swap.order.outUsdValue,
+        priceImpact: swap.order.priceImpact,
+        networkFeeLamports: swap.networkFeeLamports,
       });
       return;
     }
@@ -323,11 +277,11 @@ export class SpotCommand {
         },
         {
           label: "Input",
-          value: `${inAmount} ${inputToken.symbol} (${Output.formatDollar(order.inUsdValue)})`,
+          value: `${swap.inAmount} ${inputToken.symbol} (${Output.formatDollar(swap.order.inUsdValue)})`,
         },
         {
           label: "Output",
-          value: `${outAmount} ${outputToken.symbol} (${Output.formatDollar(order.outUsdValue)})`,
+          value: `${swap.outAmount} ${outputToken.symbol} (${Output.formatDollar(swap.order.outUsdValue)})`,
         },
         {
           label: "Network Fee",
@@ -335,7 +289,7 @@ export class SpotCommand {
         },
         {
           label: "Tx Signature",
-          value: result.signature,
+          value: swap.result.signature,
         },
       ],
     });
@@ -435,7 +389,7 @@ export class SpotCommand {
       if (!info) {
         continue;
       }
-      const multiplier = this.getScaledUiMultiplier(info);
+      const multiplier = Swap.getScaledUiMultiplier(info);
       const amount = Number(
         NumberConverter.fromChainAmount(ata.amount, info.decimals, multiplier)
       );
@@ -497,14 +451,14 @@ export class SpotCommand {
     to: string;
     key?: string;
   }): Promise<void> {
-    this.validateAmountOpts(opts);
+    Swap.validateAmountOpts(opts);
 
     const settings = Config.load();
     const [signer, token] = await Promise.all([
       Signer.load(opts.key ?? settings.activeKey),
-      this.resolveToken(opts.token),
+      DatapiClient.resolveToken(opts.token),
     ]);
-    const multiplier = this.getScaledUiMultiplier(token);
+    const multiplier = Swap.getScaledUiMultiplier(token);
     const chainAmount =
       opts.rawAmount ??
       NumberConverter.toChainAmount(opts.amount!, token.decimals, multiplier);
@@ -614,7 +568,7 @@ export class SpotCommand {
       opts.address ??
       (await Signer.load(opts.key ?? Config.load().activeKey)).address;
     const targetAsset = opts.token
-      ? await this.resolveToken(opts.token)
+      ? await DatapiClient.resolveToken(opts.token)
       : undefined;
     const { userTrades, next } = await DatapiClient.getSwapsByAddress({
       address,
@@ -726,39 +680,5 @@ export class SpotCommand {
       throw new Error(`Invalid date: ${value}`);
     }
     return new Date(ms).toISOString();
-  }
-
-  private static validateAmountOpts(opts: {
-    amount?: string;
-    rawAmount?: string;
-  }): void {
-    if (!opts.amount && !opts.rawAmount) {
-      throw new Error("Either --amount or --raw-amount must be provided.");
-    }
-    if (opts.amount && opts.rawAmount) {
-      throw new Error("Only one of --amount or --raw-amount can be provided.");
-    }
-  }
-
-  private static getScaledUiMultiplier(token: Token): number | undefined {
-    if (!token.scaledUiConfig) {
-      return undefined;
-    }
-    const isNewMultiplierActive =
-      new Date() >= new Date(token.scaledUiConfig.newMultiplierEffectiveAt);
-    return isNewMultiplierActive
-      ? token.scaledUiConfig.newMultiplier
-      : token.scaledUiConfig.multiplier;
-  }
-
-  private static async resolveToken(input: string): Promise<Token> {
-    const [token] = await DatapiClient.getTokensSearch({
-      query: input,
-      limit: "1",
-    });
-    if (!token) {
-      throw new Error(`Token not found: ${input}`);
-    }
-    return token;
   }
 }

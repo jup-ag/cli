@@ -154,4 +154,15 @@ export class DatapiClient {
     }
     return this.#ky.get("_datapi/v1/txs/users", { searchParams }).json();
   }
+
+  public static async resolveToken(input: string): Promise<Token> {
+    const [token] = await this.getTokensSearch({
+      query: input,
+      limit: "1",
+    });
+    if (!token) {
+      throw new Error(`Token not found: ${input}`);
+    }
+    return token;
+  }
 }

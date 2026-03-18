@@ -24,12 +24,13 @@ bun run ci
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 4 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 5 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
+- `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer`
 
@@ -41,16 +42,20 @@ bun run ci
 - `KeyPair` — generates/recovers keypairs (BIP39 mnemonics, BIP32 derivation)
 - `Output` — renders data as table (via cli-table3) or JSON based on config; also provides display formatters (`formatDollar`, `formatBoolean`, `formatPercentageChange`)
 - `NumberConverter` — converts between human-readable and on-chain decimal amounts
+- `Swap` — shared swap execution logic used by SpotCommand and LendCommand
 
 **API Clients** (`src/clients/`):
 
 - `DatapiClient` — Jupiter token data/search API
 - `UltraClient` — Jupiter Ultra swap API (quote + execute)
 - `PerpsClient` — Jupiter Perps API v2 (positions, orders, TP/SL)
+- `LendClient` — Jupiter Lend API (earn tokens, positions, earnings)
 
-**Spot swap flow:** token search → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
+**Spot swap flow:** token search → Swap.execute → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
 
 **Perps flow:** PerpsClient.post* → Signer.signTransaction → PerpsClient.postExecute
+
+**Lend deposit/withdraw flow:** LendClient.getTokens → resolve jlToken → Swap.execute → LendClient.getPositions (updated state)
 
 ## CLI Conventions
 
