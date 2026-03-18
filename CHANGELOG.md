@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.0
+
+### Features
+
+- Add `jup lend earn` commands: `tokens`, `positions`, `deposit`, `withdraw` (25e1814)
+
+### Improvements
+
+- Extract shared `Swap.execute()`, `Swap.validateAmountOpts()`, `Swap.getScaledUiMultiplier()`, and `DatapiClient.resolveToken()` utilities from `SpotCommand` (25e1814)
+- Improve release skill (b783a2a)
+
 ## v0.3.0
 
 ### Features
