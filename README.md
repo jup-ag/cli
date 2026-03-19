@@ -35,6 +35,8 @@ jup keys add key1 --private-key <key>
 jup spot portfolio
 # Swap 1 SOL to USDC
 jup spot swap --from SOL --to USDC --amount 1
+# Reclaim rent from empty token accounts
+jup spot reclaim
 
 # Open a 3x long SOL position with $10 USDC
 jup perps open --asset SOL --side long --amount 10 --input USDC --leverage 3

@@ -102,6 +102,29 @@ jup spot portfolio --address <wallet-address>
 }
 ```
 
+### Reclaim rent from ATA
+
+```bash
+jup spot reclaim
+jup spot reclaim --key mykey
+jup spot reclaim --token USDC
+```
+
+- With no options, reclaims rent from all empty Associated Token Accounts (ATA) owned by the active key's wallet
+- `--token` accepts a token symbol or mint address to filter which account to reclaim from; ATA balance must be zero to reclaim
+
+```js
+// Example JSON response:
+{
+  "totalLamportsReclaimed": 5000, // divide by 10^9 for total SOL reclaimed
+  "totalValueReclaimed": 0.005, // USD value of reclaimed SOL
+  "networkFeeLamports": 5000, // divide by 10^9 for SOL fee
+  "signatures": [ // array of tx signatures for each batch of reclaim tx
+    "3dV98zG...",
+  ]
+}
+```
+
 ### View trade history
 
 ```bash

@@ -57,6 +57,9 @@ export type HoldingsTokenAccount = {
   isAssociatedTokenAccount: boolean;
   decimals: number;
   programId: string;
+  lamports: string;
+  reclaimableLamports?: string;
+  excludeFromNetWorth?: boolean;
 };
 
 export type GetHoldingsResponse = {
@@ -103,6 +106,50 @@ type PostExecuteTransferRequest = {
 type PostExecuteTransferResponse = {
   code: number;
   signature: string;
+};
+
+export type PostReclaimCraftRequest = {
+  owner: string;
+  mints: string[];
+};
+
+export type PostReclaimCraftResponse = {
+  transactions: ReclaimTransaction[];
+  code: number;
+  error?: string;
+  totalLamportsReclaimed: string;
+  netLamportsReclaimed: string;
+  netReclaimedUsdAmount?: number;
+  serviceFeeLamports: string;
+  serviceFeeUsdAmount?: number;
+  gasCostLamports: string;
+  gasCostUsdAmount?: number;
+  skippedMints?: SkippedMint[];
+  totalTime: number;
+  expireAt: string;
+};
+
+type ReclaimTransaction = {
+  requestId: string;
+  transaction: string;
+};
+
+type SkippedMint = {
+  mint: string;
+  reason: "verified" | "frozen";
+};
+
+export type PostReclaimExecuteRequest = {
+  requestId: string;
+  signedTransaction: string;
+};
+
+export type PostReclaimExecuteResponse = {
+  status: "Success" | "Failed";
+  signature: string;
+  code: number;
+  error?: string;
+  totalTime: number;
 };
 
 export class UltraClient {
@@ -155,5 +202,21 @@ export class UltraClient {
     req: PostExecuteTransferRequest
   ): Promise<PostExecuteTransferResponse> {
     return this.#ky.post("transfer/execute", { json: req }).json();
+  }
+
+  public static async postReclaimCraft(req: PostReclaimCraftRequest) {
+    return this.#ky
+      .post<PostReclaimCraftResponse>("reclaim/craft", {
+        json: req,
+      })
+      .json();
+  }
+
+  public static async postReclaimExecute(req: PostReclaimExecuteRequest) {
+    return this.#ky
+      .post<PostReclaimExecuteResponse>("reclaim/execute", {
+        json: req,
+      })
+      .json();
   }
 }

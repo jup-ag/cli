@@ -32,7 +32,7 @@ bun run ci
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
 - `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
-- `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer`
+- `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
 
 **Libraries** (`src/lib/`):
 
