@@ -11,7 +11,7 @@ On failure, commands exit with non-zero code with an error message. In JSON mode
 - [Setup](docs/setup.md): Installation of the CLI
 - [Config](docs/config.md): CLI settings and configurations
 - [Keys](docs/keys.md): Private key management
-- [Spot](docs/spot.md): Spot trading, transfers, token and portfolio data
+- [Spot](docs/spot.md): Spot trading, transfers, reclaim rent, token and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
-- Lend: Lending and borrowing (coming soon)
+- [Lend](docs/lend.md): Lending and yield farming
 - Predictions: Create and trade prediction markets (coming soon)

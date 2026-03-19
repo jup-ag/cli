@@ -1,5 +1,5 @@
 import { findAssociatedTokenPda } from "@solana-program/token";
-import type { Address, Base64EncodedBytes } from "@solana/kit";
+import { isAddress, type Address, type Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
 
@@ -91,6 +91,12 @@ export class SpotCommand {
       )
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.transfer(opts));
+    spot
+      .command("reclaim")
+      .description("Reclaim SOL rent from empty token accounts")
+      .option("--key <name>", "Key to use for signing")
+      .option("--token <token>", "Token symbol or mint address to reclaim")
+      .action((opts) => this.reclaim(opts));
   }
 
   private static async tokens(opts: {
@@ -357,6 +363,7 @@ export class SpotCommand {
       priceChange: number;
       isVerified?: boolean | undefined;
       scaledUiMultiplier?: number | undefined;
+      reclaimableLamports?: string;
     }[] = [];
 
     // Add combined SOL/WSOL entry
@@ -404,6 +411,7 @@ export class SpotCommand {
         priceChange: info.stats24h?.priceChange ?? 0,
         isVerified: info.isVerified,
         scaledUiMultiplier: multiplier,
+        reclaimableLamports: ata.reclaimableLamports,
       });
     }
 
@@ -669,6 +677,131 @@ export class SpotCommand {
     if (next) {
       console.log("\nNext offset:", next);
     }
+  }
+
+  private static async reclaim(opts: {
+    key?: string;
+    token?: string;
+  }): Promise<void> {
+    const signer = await Signer.load(opts.key ?? Config.load().activeKey);
+    const holdings = await UltraClient.getHoldings(signer.address);
+
+    // Extract reclaimable mints from holdings ATAs
+    const reclaimableMints: string[] = [];
+    for (const [mint, accounts] of Object.entries(holdings.tokens)) {
+      const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
+      if (ata?.reclaimableLamports && BigInt(ata.reclaimableLamports) > 0n) {
+        reclaimableMints.push(mint);
+      }
+    }
+
+    // Filter to single token if --token provided
+    let mints = reclaimableMints;
+    if (opts.token) {
+      const mint = isAddress(opts.token)
+        ? opts.token
+        : (await DatapiClient.resolveToken(opts.token)).id;
+      mints = reclaimableMints.includes(mint) ? [mint] : [];
+    }
+    if (mints.length === 0) {
+      throw new Error("No reclaimable token accounts found.");
+    }
+
+    // Chunk mints into batches of 200 and craft
+    const MAX_MINTS_PER_REQUEST = 200;
+    const batches: string[][] = [];
+    for (let i = 0; i < mints.length; i += MAX_MINTS_PER_REQUEST) {
+      batches.push(mints.slice(i, i + MAX_MINTS_PER_REQUEST));
+    }
+    const craftResponses = await Promise.all(
+      batches.map((batch) =>
+        UltraClient.postReclaimCraft({
+          owner: signer.address,
+          mints: batch,
+        })
+      )
+    );
+
+    // Aggregate across chunks
+    const allTransactions: { requestId: string; transaction: string }[] = [];
+    let netLamportsReclaimed = 0n;
+    let networkFeeLamports = 0n;
+    let totalValueReclaimed = 0;
+    let skippedCount = 0;
+
+    for (const r of craftResponses) {
+      if (r.error) {
+        throw new Error(r.error);
+      }
+      allTransactions.push(...r.transactions);
+      netLamportsReclaimed += BigInt(r.netLamportsReclaimed);
+      networkFeeLamports += BigInt(r.gasCostLamports);
+      totalValueReclaimed += r.netReclaimedUsdAmount ?? 0;
+      skippedCount += r.skippedMints?.length ?? 0;
+    }
+
+    if (allTransactions.length === 0) {
+      throw new Error("No reclaimable token accounts found.");
+    }
+
+    // Sign and execute each transaction sequentially
+    const signatures: string[] = [];
+    for (const tx of allTransactions) {
+      const signedTx = await signer.signTransaction(
+        tx.transaction as Base64EncodedBytes
+      );
+      const result = await UltraClient.postReclaimExecute({
+        requestId: tx.requestId,
+        signedTransaction: signedTx,
+      });
+      if (result.status === "Failed") {
+        throw new Error(result.error ?? "Reclaim transaction failed.");
+      }
+      signatures.push(result.signature);
+    }
+
+    if (Output.isJson()) {
+      Output.json({
+        totalLamportsReclaimed: Number(netLamportsReclaimed),
+        totalValueReclaimed: totalValueReclaimed,
+        networkFeeLamports: Number(networkFeeLamports),
+        signatures,
+      });
+      return;
+    }
+
+    const reclaimedSol = NumberConverter.fromChainAmount(
+      netLamportsReclaimed,
+      Asset.SOL.decimals
+    );
+    const networkFee = NumberConverter.fromChainAmount(
+      networkFeeLamports,
+      Asset.SOL.decimals
+    );
+    const accountCount = mints.length - skippedCount;
+
+    Output.table({
+      type: "vertical",
+      rows: [
+        {
+          label: "SOL Reclaimed",
+          value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+        },
+        {
+          label: "Accounts Reclaimed",
+          value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
+        },
+        {
+          label: "Network Fee",
+          value: `${networkFee} SOL`,
+        },
+        ...signatures.map((sig, i) => ({
+          label:
+            signatures.length === 1 ? "Tx Signature" : `Tx Signature ${i + 1}`,
+          value: sig,
+        })),
+      ],
+    });
   }
 
   private static parseTimestamp(value: string): string {
