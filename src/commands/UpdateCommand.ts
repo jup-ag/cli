@@ -184,7 +184,20 @@ export class UpdateCommand {
       );
     }
 
-    const assetName = this.getBinaryAssetName();
+    const supportedPlatforms = new Set(["linux", "darwin"]);
+    const supportedArchs = new Set(["x64", "arm64"]);
+
+    if (
+      !supportedPlatforms.has(process.platform) ||
+      !supportedArchs.has(process.arch)
+    ) {
+      throw new Error(
+        `Unsupported platform: ${process.platform}-${process.arch}. ` +
+          "Supported: linux-x64, linux-arm64, darwin-x64, darwin-arm64"
+      );
+    }
+
+    const assetName = `jup-${process.platform}-${process.arch}`;
     const baseUrl = `https://github.com/jup-ag/cli/releases/download/v${version}`;
 
     const [binary, checksums] = await Promise.all([
@@ -228,22 +241,5 @@ export class UpdateCommand {
       }
       throw err;
     }
-  }
-
-  private static getBinaryAssetName(): string {
-    const supportedPlatforms = new Set(["linux", "darwin"]);
-    const supportedArchs = new Set(["x64", "arm64"]);
-
-    if (
-      !supportedPlatforms.has(process.platform) ||
-      !supportedArchs.has(process.arch)
-    ) {
-      throw new Error(
-        `Unsupported platform: ${process.platform}-${process.arch}. ` +
-          "Supported: linux-x64, linux-arm64, darwin-x64, darwin-arm64"
-      );
-    }
-
-    return `jup-${process.platform}-${process.arch}`;
   }
 }
