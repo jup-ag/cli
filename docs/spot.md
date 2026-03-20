@@ -9,7 +9,10 @@ Anywhere a token is specified (`--from`, `--to`, `--token`, `--search`), you can
 - **Symbol** (e.g. `SOL`, `USDC`, `JUP`) — the CLI auto-resolves to the best-matching token
 - **Mint address** (e.g. `So11111111111111111111111111111111111111112`) — exact match
 
-When using a symbol, the CLI picks the top result from Jupiter's token search. Use a mint address when you need to target a specific token (e.g. to disambiguate tokens with the same symbol).
+Token resolution depends on the context:
+
+- **Wallet-bound options** (`swap --from`, `transfer --token`, `reclaim --token`) resolve against the tokens in your wallet. This ensures the CLI matches the token you actually hold, not a different token with the same symbol. If the token is not found in your wallet, the command errors. If multiple tokens share the same symbol, the CLI asks you to use the mint address instead.
+- **All other options** (`swap --to`, `quote --from`, `quote --to`, `tokens --search`, `history --token`) resolve via Jupiter's global token search, picking the top result.
 
 ## Commands
 
@@ -111,7 +114,6 @@ jup spot reclaim --token USDC
 ```
 
 - With no options, reclaims rent from all empty Associated Token Accounts (ATA) owned by the active key's wallet
-- `--token` accepts a token symbol or mint address to filter which account to reclaim from; ATA balance must be zero to reclaim
 
 ```js
 // Example JSON response:

@@ -10,6 +10,7 @@ import {
 } from "../clients/DatapiClient.ts";
 import {
   UltraClient,
+  type GetHoldingsResponse,
   type HoldingsTokenAccount,
 } from "../clients/UltraClient.ts";
 import { Asset } from "../lib/Asset.ts";
@@ -231,9 +232,9 @@ export class SpotCommand {
     Swap.validateAmountOpts(opts);
 
     const settings = Config.load();
-    const [signer, inputToken, outputToken] = await Promise.all([
-      Signer.load(opts.key ?? settings.activeKey),
-      DatapiClient.resolveToken(opts.from),
+    const signer = await Signer.load(opts.key ?? settings.activeKey);
+    const [inputToken, outputToken] = await Promise.all([
+      this.resolveWalletToken(opts.from, signer.address),
       DatapiClient.resolveToken(opts.to),
     ]);
 
@@ -332,24 +333,10 @@ export class SpotCommand {
       allMints.push(Asset.SOL.id);
     }
 
-    const BATCH_SIZE = 100;
     const tokenMap = new Map<string, Token>();
-    const batches: string[][] = [];
-    for (let i = 0; i < allMints.length; i += BATCH_SIZE) {
-      batches.push(allMints.slice(i, i + BATCH_SIZE));
-    }
-    const resolved = await Promise.all(
-      batches.map((batch) =>
-        DatapiClient.getTokensSearch({
-          query: batch.join(","),
-          limit: BATCH_SIZE.toString(),
-        })
-      )
-    );
-    for (const tokens of resolved) {
-      for (const token of tokens) {
-        tokenMap.set(token.id, token);
-      }
+    const tokens = await DatapiClient.getTokensByMints(allMints);
+    for (const token of tokens) {
+      tokenMap.set(token.id, token);
     }
 
     const outputTokens: {
@@ -462,10 +449,8 @@ export class SpotCommand {
     Swap.validateAmountOpts(opts);
 
     const settings = Config.load();
-    const [signer, token] = await Promise.all([
-      Signer.load(opts.key ?? settings.activeKey),
-      DatapiClient.resolveToken(opts.token),
-    ]);
+    const signer = await Signer.load(opts.key ?? settings.activeKey);
+    const token = await this.resolveWalletToken(opts.token, signer.address);
     const multiplier = Swap.getScaledUiMultiplier(token);
     const chainAmount =
       opts.rawAmount ??
@@ -601,14 +586,9 @@ export class SpotCommand {
     // Resolve token metadata for all unique mints
     const mints = [...new Set(userTrades.map((t) => t.assetId))];
     const tokenMap = new Map<string, Token>();
-    if (mints.length > 0) {
-      const tokens = await DatapiClient.getTokensSearch({
-        query: mints.join(","),
-        limit: mints.length.toString(),
-      });
-      for (const token of tokens) {
-        tokenMap.set(token.id, token);
-      }
+    const tokens = await DatapiClient.getTokensByMints(mints);
+    for (const token of tokens) {
+      tokenMap.set(token.id, token);
     }
 
     const trades = [...grouped.values()]
@@ -698,10 +678,27 @@ export class SpotCommand {
     // Filter to single token if --token provided
     let mints = reclaimableMints;
     if (opts.token) {
-      const mint = isAddress(opts.token)
-        ? opts.token
-        : (await DatapiClient.resolveToken(opts.token)).id;
-      mints = reclaimableMints.includes(mint) ? [mint] : [];
+      if (isAddress(opts.token)) {
+        mints = reclaimableMints.includes(opts.token) ? [opts.token] : [];
+      } else {
+        try {
+          const token = await this.resolveTokenFromHoldings(
+            opts.token,
+            reclaimableMints
+          );
+          mints = [token.id];
+        } catch (err) {
+          if (
+            err instanceof Error &&
+            err.message === `Token "${opts.token}" not found in wallet.`
+          ) {
+            throw new Error(
+              `No reclaimable token account found for "${opts.token}".`
+            );
+          }
+          throw err;
+        }
+      }
     }
     if (mints.length === 0) {
       throw new Error("No reclaimable token accounts found.");
@@ -802,6 +799,55 @@ export class SpotCommand {
         })),
       ],
     });
+  }
+
+  private static async resolveWalletToken(
+    input: string,
+    walletAddress: string
+  ): Promise<Token> {
+    if (isAddress(input)) {
+      return DatapiClient.resolveToken(input);
+    }
+    const holdings = await UltraClient.getHoldings(walletAddress);
+    return this.resolveTokenFromHoldings(
+      input,
+      this.getHoldingsMints(holdings)
+    );
+  }
+
+  private static async resolveTokenFromHoldings(
+    input: string,
+    holdingsMints: string[]
+  ): Promise<Token> {
+    if (isAddress(input)) {
+      if (!holdingsMints.includes(input)) {
+        throw new Error(`Token ${input} not found in wallet.`);
+      }
+      return DatapiClient.resolveToken(input);
+    }
+
+    const tokens = await DatapiClient.getTokensByMints(holdingsMints);
+    const query = input.toLowerCase();
+    const matches = tokens.filter((t) => t.symbol.toLowerCase() === query);
+
+    if (matches.length === 0) {
+      throw new Error(`Token "${input}" not found in wallet.`);
+    }
+    if (matches.length === 1) {
+      return matches[0]!;
+    }
+    const options = matches.map((t) => `  - ${t.symbol} (${t.id})`).join("\n");
+    throw new Error(
+      `Multiple tokens matching "${input}" found in wallet. Use the mint address instead:\n${options}`
+    );
+  }
+
+  private static getHoldingsMints(holdings: GetHoldingsResponse): string[] {
+    const mints = Object.keys(holdings.tokens);
+    if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
+      mints.push(Asset.SOL.id);
+    }
+    return mints;
   }
 
   private static parseTimestamp(value: string): string {

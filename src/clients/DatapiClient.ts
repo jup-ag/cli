@@ -155,6 +155,28 @@ export class DatapiClient {
     return this.#ky.get("_datapi/v1/txs/users", { searchParams }).json();
   }
 
+  public static async getTokensByMints(
+    mints: string[]
+  ): Promise<Token[]> {
+    if (mints.length === 0) {
+      return [];
+    }
+    const BATCH_SIZE = 100;
+    const batches: string[][] = [];
+    for (let i = 0; i < mints.length; i += BATCH_SIZE) {
+      batches.push(mints.slice(i, i + BATCH_SIZE));
+    }
+    const resolved = await Promise.all(
+      batches.map((batch) =>
+        this.getTokensSearch({
+          query: batch.join(","),
+          limit: BATCH_SIZE.toString(),
+        })
+      )
+    );
+    return resolved.flat();
+  }
+
   public static async resolveToken(input: string): Promise<Token> {
     const [token] = await this.getTokensSearch({
       query: input,
