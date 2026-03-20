@@ -127,9 +127,7 @@ export class UpdateCommand {
 
   private static async getLatestVersion(): Promise<string> {
     const release = await ky
-      .get("https://api.github.com/repos/jup-ag/cli/releases/latest", {
-        headers: { "User-Agent": "@jup-ag/cli" },
-      })
+      .get("https://api.github.com/repos/jup-ag/cli/releases/latest")
       .json<{ tag_name: string }>();
 
     return release.tag_name.replace(/^v/, "");
@@ -188,11 +186,10 @@ export class UpdateCommand {
 
     const assetName = this.getBinaryAssetName();
     const baseUrl = `https://github.com/jup-ag/cli/releases/download/v${version}`;
-    const headers = { "User-Agent": "@jup-ag/cli" };
 
     const [binary, checksums] = await Promise.all([
-      ky.get(`${baseUrl}/${assetName}`, { headers }).arrayBuffer(),
-      ky.get(`${baseUrl}/checksums.txt`, { headers }).text(),
+      ky.get(`${baseUrl}/${assetName}`).arrayBuffer(),
+      ky.get(`${baseUrl}/checksums.txt`).text(),
     ]);
 
     const buf = Buffer.from(binary);
