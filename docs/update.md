@@ -60,4 +60,3 @@ jup update --check
 
 - Binary updates require write permission to the binary path. If you get a permission error, run `sudo jup update`.
 - Binary builds are available for: `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`.
-- In dev mode (`bun run dev`), the update command will refuse to run the binary update path to avoid overwriting the Bun runtime.

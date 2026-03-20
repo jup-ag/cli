@@ -176,11 +176,9 @@ export class UpdateCommand {
     const binaryPath = process.execPath;
     const execName = basename(binaryPath);
 
-    // Guard: refuse to overwrite the runtime in dev mode
     if (execName === "bun" || execName === "node") {
       throw new Error(
-        "Cannot self-update in dev mode — process.execPath points to the runtime, not the jup binary. " +
-          "Build a standalone binary first: bun build src/index.ts --compile --outfile jup"
+        "Cannot self-update: process.execPath points to the runtime, not the jup binary"
       );
     }
 
