@@ -184,38 +184,31 @@ export class UpdateCommand {
       );
     }
 
-    const supportedPlatforms = new Set(["linux", "darwin"]);
-    const supportedArchs = new Set(["x64", "arm64"]);
-
-    if (
-      !supportedPlatforms.has(process.platform) ||
-      !supportedArchs.has(process.arch)
-    ) {
-      throw new Error(
-        `Unsupported platform: ${process.platform}-${process.arch}. ` +
-          "Supported: linux-x64, linux-arm64, darwin-x64, darwin-arm64"
-      );
-    }
-
     const assetName = `jup-${process.platform}-${process.arch}`;
     const baseUrl = `https://github.com/jup-ag/cli/releases/download/v${version}`;
 
-    const [binary, checksums] = await Promise.all([
-      ky.get(`${baseUrl}/${assetName}`).arrayBuffer(),
-      ky.get(`${baseUrl}/checksums.txt`).text(),
-    ]);
-
-    const buf = Buffer.from(binary);
-
-    // Verify checksum — exact match on filename after the hash
+    // Fetch checksums first to validate platform support before downloading
+    const checksums = await ky.get(`${baseUrl}/checksums.txt`).text();
     const checksumLine = checksums
       .split("\n")
       .map((line) => line.trim().split(/\s+/))
       .find((parts) => parts.length === 2 && parts[1] === assetName);
 
     if (!checksumLine) {
-      throw new Error(`Checksum not found for ${assetName}`);
+      const supported = checksums
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/))
+        .filter((parts) => parts.length === 2)
+        .map((parts) => parts[1]!.replace("jup-", ""))
+        .join(", ");
+      throw new Error(
+        `Unsupported platform: ${process.platform}-${process.arch}. ` +
+          `Supported: ${supported}`
+      );
     }
+
+    const binary = await ky.get(`${baseUrl}/${assetName}`).arrayBuffer();
+    const buf = Buffer.from(binary);
 
     const expectedHash = checksumLine[0];
     const actualHash = createHash("sha256").update(buf).digest("hex");
