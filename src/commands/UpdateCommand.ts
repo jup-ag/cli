@@ -1,3 +1,4 @@
+import { execSync } from "child_process";
 import { createHash } from "crypto";
 import { chmod, rename, rm, writeFile } from "fs/promises";
 import { basename } from "path";
@@ -67,40 +68,17 @@ export class UpdateCommand {
 
     const method = this.detectInstallMethod();
 
-    if (method === "npm") {
-      const hint = this.getPackageManagerHint(latestVersion);
-      if (Output.isJson()) {
-        Output.json({
-          currentVersion,
-          latestVersion,
-          status: "manual_update_required",
-          method: "npm",
-          command: hint,
-        });
-      } else {
-        Output.table({
-          type: "vertical",
-          rows: [
-            { label: "Current Version", value: `v${currentVersion}` },
-            {
-              label: "Latest Version",
-              value: chalk.green(`v${latestVersion}`),
-            },
-            {
-              label: "Update Command",
-              value: chalk.cyan(hint),
-            },
-          ],
-        });
-      }
-      return;
-    }
-
     if (!Output.isJson()) {
-      console.log(`Downloading v${latestVersion}...`);
+      console.log(`Updating to v${latestVersion}...`);
     }
 
-    await this.updateBinary(latestVersion);
+    if (method === "npm") {
+      execSync(this.getPackageManagerCommand(latestVersion), {
+        stdio: "inherit",
+      });
+    } else {
+      await this.updateBinary(latestVersion);
+    }
 
     if (Output.isJson()) {
       Output.json({
@@ -154,7 +132,7 @@ export class UpdateCommand {
     return "binary";
   }
 
-  private static getPackageManagerHint(version: string): string {
+  private static getPackageManagerCommand(version: string): string {
     const agent = process.env.npm_config_user_agent ?? "";
     if (agent.startsWith("pnpm")) {
       return `pnpm add -g @jup-ag/cli@${version}`;

@@ -14,10 +14,10 @@ jup update --check
 
 ## How it works
 
-1. Checks the latest release on GitHub (via redirect, no API token needed)
+1. Checks the latest release on GitHub
 2. Compares with the installed version
 3. If a newer version is available:
-   - **Package manager installs** — prints the appropriate update command (npm, pnpm, yarn, bun, or Volta)
+   - **Package manager installs** — runs the appropriate update command (npm, pnpm, yarn, bun, or Volta)
    - **Binary installs** — downloads the new binary, verifies its SHA-256 checksum, and atomically replaces the current binary
 4. Outputs the result
 
@@ -38,16 +38,15 @@ jup update --check
   "status": "update_available"
 }
 
-// Package manager install — prints command to run
+// Updated via package manager
 {
   "currentVersion": "0.3.0",
   "latestVersion": "0.4.0",
-  "status": "manual_update_required",
-  "method": "npm",
-  "command": "npm install -g @jup-ag/cli@0.4.0"
+  "status": "updated",
+  "method": "npm"
 }
 
-// Binary updated
+// Updated via binary
 {
   "currentVersion": "0.3.0",
   "latestVersion": "0.4.0",
