@@ -6,6 +6,7 @@ import { KeysCommand } from "./commands/KeysCommand.ts";
 import { LendCommand } from "./commands/LendCommand.ts";
 import { PerpsCommand } from "./commands/PerpsCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
+import { UpdateCommand } from "./commands/UpdateCommand.ts";
 
 import { version } from "../package.json";
 import { Config } from "./lib/Config.ts";
@@ -34,6 +35,7 @@ KeysCommand.register(program);
 LendCommand.register(program);
 PerpsCommand.register(program);
 SpotCommand.register(program);
+UpdateCommand.register(program);
 
 program.parseAsync().catch(async (err: unknown) => {
   await Output.error(err);
