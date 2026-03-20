@@ -126,27 +126,13 @@ export class UpdateCommand {
   }
 
   private static async getLatestVersion(): Promise<string> {
-    // Use native fetch with manual redirect to avoid GitHub API rate limits.
-    // The /releases/latest endpoint returns a 302 to /releases/tag/vX.Y.Z.
-    const response = await fetch(
-      "https://github.com/jup-ag/cli/releases/latest",
-      {
-        redirect: "manual",
+    const release = await ky
+      .get("https://api.github.com/repos/jup-ag/cli/releases/latest", {
         headers: { "User-Agent": "@jup-ag/cli" },
-      }
-    );
+      })
+      .json<{ tag_name: string }>();
 
-    const location = response.headers.get("location");
-    if (!location) {
-      throw new Error("Failed to resolve latest version from GitHub");
-    }
-
-    const tag = location.split("/tag/").pop();
-    if (!tag) {
-      throw new Error("Failed to parse version from redirect URL");
-    }
-
-    return tag.replace(/^v/, "");
+    return release.tag_name.replace(/^v/, "");
   }
 
   private static isNewer(latest: string, current: string): boolean {
@@ -209,22 +195,20 @@ export class UpdateCommand {
       ky.get(`${baseUrl}/checksums.txt`, { headers }).text(),
     ]);
 
-    // Verify checksum — exact match on filename after the hash
-    const expectedHash = checksums
-      .split("\n")
-      .find((line) => {
-        const parts = line.trim().split(/\s+/);
-        return parts.length === 2 && parts[1] === assetName;
-      })
-      ?.split(/\s+/)[0];
+    const buf = Buffer.from(binary);
 
-    if (!expectedHash) {
+    // Verify checksum — exact match on filename after the hash
+    const checksumLine = checksums
+      .split("\n")
+      .map((line) => line.trim().split(/\s+/))
+      .find((parts) => parts.length === 2 && parts[1] === assetName);
+
+    if (!checksumLine) {
       throw new Error(`Checksum not found for ${assetName}`);
     }
 
-    const actualHash = createHash("sha256")
-      .update(Buffer.from(binary))
-      .digest("hex");
+    const expectedHash = checksumLine[0];
+    const actualHash = createHash("sha256").update(buf).digest("hex");
 
     if (actualHash !== expectedHash) {
       throw new Error(
@@ -235,7 +219,7 @@ export class UpdateCommand {
     const tmpPath = `${binaryPath}.tmp`;
 
     try {
-      await writeFile(tmpPath, Buffer.from(binary));
+      await writeFile(tmpPath, buf);
       await chmod(tmpPath, 0o755);
       await rename(tmpPath, binaryPath);
     } catch (err: unknown) {
@@ -250,28 +234,19 @@ export class UpdateCommand {
   }
 
   private static getBinaryAssetName(): string {
-    const platform = process.platform;
-    const arch = process.arch;
+    const supportedPlatforms = new Set(["linux", "darwin"]);
+    const supportedArchs = new Set(["x64", "arm64"]);
 
-    const osMap: Record<string, string> = {
-      linux: "linux",
-      darwin: "darwin",
-    };
-    const archMap: Record<string, string> = {
-      x64: "x64",
-      arm64: "arm64",
-    };
-
-    const os = osMap[platform];
-    const cpu = archMap[arch];
-
-    if (!os || !cpu) {
+    if (
+      !supportedPlatforms.has(process.platform) ||
+      !supportedArchs.has(process.arch)
+    ) {
       throw new Error(
-        `Unsupported platform: ${platform}-${arch}. ` +
+        `Unsupported platform: ${process.platform}-${process.arch}. ` +
           "Supported: linux-x64, linux-arm64, darwin-x64, darwin-arm64"
       );
     }
 
-    return `jup-${os}-${cpu}`;
+    return `jup-${process.platform}-${process.arch}`;
   }
 }
