@@ -10,8 +10,6 @@ import type { Command } from "commander";
 import { version as currentVersion } from "../../package.json";
 import { Output } from "../lib/Output.ts";
 
-type InstallMethod = "npm" | "binary";
-
 export class UpdateCommand {
   public static register(program: Command): void {
     program
@@ -66,26 +64,17 @@ export class UpdateCommand {
       return;
     }
 
-    const method = this.detectInstallMethod();
-
     if (!Output.isJson()) {
       console.log(`Updating to v${latestVersion}...`);
     }
 
-    if (method === "npm") {
-      execSync(this.getPackageManagerCommand(latestVersion), {
-        stdio: "inherit",
-      });
-    } else {
-      await this.updateBinary();
-    }
+    await this.runInstallScript();
 
     if (Output.isJson()) {
       Output.json({
         currentVersion,
         latestVersion,
         status: "updated",
-        method,
       });
     } else {
       Output.table({
@@ -96,7 +85,6 @@ export class UpdateCommand {
             label: "New Version",
             value: chalk.green(`v${latestVersion}`),
           },
-          { label: "Method", value: method },
           { label: "Status", value: chalk.green("Updated successfully") },
         ],
       });
@@ -125,34 +113,9 @@ export class UpdateCommand {
     return false;
   }
 
-  private static detectInstallMethod(): InstallMethod {
-    if (process.argv[1]?.includes("node_modules")) {
-      return "npm";
-    }
-    return "binary";
-  }
-
-  private static getPackageManagerCommand(version: string): string {
-    const agent = process.env.npm_config_user_agent ?? "";
-    if (agent.startsWith("pnpm")) {
-      return `pnpm add -g @jup-ag/cli@${version}`;
-    }
-    if (agent.startsWith("yarn")) {
-      return `yarn global add @jup-ag/cli@${version}`;
-    }
-    if (agent.startsWith("bun")) {
-      return `bun add -g @jup-ag/cli@${version}`;
-    }
-    // Check Volta via env var (set when Volta manages the shell)
-    if (process.env.VOLTA_HOME) {
-      return "volta install @jup-ag/cli";
-    }
-    return `npm install -g @jup-ag/cli@${version}`;
-  }
-
-  private static async updateBinary(): Promise<void> {
+  private static async runInstallScript(): Promise<void> {
     const scriptUrl =
-      "https://github.com/jup-ag/cli/releases/latest/download/install.sh";
+      "https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh";
     const dir = await mkdtemp(join(tmpdir(), "jup-"));
     const scriptPath = join(dir, "install.sh");
 
