@@ -13,7 +13,7 @@ npm i -g @jup-ag/cli
 Auto-detects the best install method (volta > npm > standalone binary):
 
 ```bash
-curl -fsSL https://github.com/jup-ag/cli/releases/latest/download/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh | bash
 ```
 
 ### Option 3: Standalone binary

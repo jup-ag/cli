@@ -16,7 +16,7 @@ npm i -g @jup-ag/cli
 Or use the install script to auto-detect the best method:
 
 ```bash
-curl -fsSL https://github.com/jup-ag/cli/releases/latest/download/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh | bash
 ```
 
 ## Quick Start

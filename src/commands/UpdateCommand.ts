@@ -107,22 +107,14 @@ export class UpdateCommand {
 
   private static async runInstallScript(): Promise<void> {
     const scriptUrl =
-      "https://github.com/jup-ag/cli/releases/latest/download/install.sh";
+      "https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh";
     const dir = await mkdtemp(join(tmpdir(), "jup-"));
     const scriptPath = join(dir, "install.sh");
 
     try {
       const script = await ky.get(scriptUrl).text();
       await writeFile(scriptPath, script, { mode: 0o700 });
-      execFileSync("bash", [scriptPath], {
-        env: {
-          ...process.env,
-          JUP_INSTALL_QUIET: Output.isJson() ? "1" : "0",
-        },
-        stdio: Output.isJson()
-          ? ["inherit", "ignore", "inherit"]
-          : "inherit",
-      });
+      execFileSync("bash", [scriptPath], { stdio: "inherit" });
     } catch {
       throw new Error(
         "Update failed. Run `jup update` again or install manually from https://github.com/jup-ag/cli/releases"
