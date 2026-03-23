@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { rm, writeFile } from "fs/promises";
+import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -153,14 +153,15 @@ export class UpdateCommand {
   private static async updateBinary(): Promise<void> {
     const scriptUrl =
       "https://github.com/jup-ag/cli/releases/latest/download/install.sh";
-    const scriptPath = join(tmpdir(), "jup-install.sh");
+    const dir = await mkdtemp(join(tmpdir(), "jup-"));
+    const scriptPath = join(dir, "install.sh");
 
     try {
       const script = await ky.get(scriptUrl).text();
-      await writeFile(scriptPath, script);
+      await writeFile(scriptPath, script, { mode: 0o700 });
       execSync(`bash ${scriptPath}`, { stdio: "inherit" });
     } finally {
-      await rm(scriptPath, { force: true }).catch(() => {});
+      await rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   }
 }
