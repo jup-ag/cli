@@ -4,21 +4,35 @@ set -euo pipefail
 PACKAGE="@jup-ag/cli"
 BINARY="jup"
 REPO="jup-ag/cli"
+VERSION="${JUP_VERSION:-latest}"
+QUIET="${JUP_INSTALL_QUIET:-0}"
 
-info() { printf '\033[1;34m%s\033[0m\n' "$*"; }
+if [ "$VERSION" != "latest" ]; then
+  VERSION="${VERSION#v}"
+fi
+
+info() { [ "$QUIET" = "1" ] || printf '\033[1;34m%s\033[0m\n' "$*" >&2; }
 error() { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
+
+if [ "$VERSION" = "latest" ]; then
+  PACKAGE_SPEC="$PACKAGE"
+  RELEASE_BASE="https://github.com/${REPO}/releases/latest/download"
+else
+  PACKAGE_SPEC="${PACKAGE}@${VERSION}"
+  RELEASE_BASE="https://github.com/${REPO}/releases/download/v${VERSION}"
+fi
 
 # Volta
 if command -v volta &>/dev/null; then
-  info "Installing $PACKAGE via volta..."
-  volta install "$PACKAGE"
+  info "Installing $PACKAGE_SPEC via volta..."
+  volta install "$PACKAGE_SPEC"
   exit 0
 fi
 
 # npm
 if command -v npm &>/dev/null; then
-  info "Installing $PACKAGE via npm..."
-  npm install -g "$PACKAGE"
+  info "Installing $PACKAGE_SPEC via npm..."
+  npm install -g "$PACKAGE_SPEC"
   exit 0
 fi
 
@@ -42,9 +56,9 @@ esac
 
 ASSET="${BINARY}-${os}-${arch}"
 INSTALL_DIR="${JUP_INSTALL_DIR:-/usr/local/bin}"
-URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+URL="${RELEASE_BASE}/${ASSET}"
 
-CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/checksums.txt"
+CHECKSUM_URL="${RELEASE_BASE}/checksums.txt"
 
 TMP_DIR=$(mktemp -d)
 TMP_BINARY="${TMP_DIR}/${BINARY}"

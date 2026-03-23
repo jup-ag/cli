@@ -62,22 +62,35 @@ jobs:
         if: steps.version.outputs.changed == 'true'
         run: cd dist && sha256sum jup-* > checksums.txt
 
-      - name: Create tag
+      - name: Publish to npm
         if: steps.version.outputs.changed == 'true'
+        run: npm publish --access public --provenance
+
+      - name: Wait for npm package availability
+        if: steps.version.outputs.changed == 'true'
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          git tag ${{ steps.version.outputs.tag }}
-          git push origin ${{ steps.version.outputs.tag }}
+          for attempt in {1..30}; do
+            PUBLISHED_VERSION=$(npm view @jup-ag/cli version 2>/dev/null || true)
+            if [ "$PUBLISHED_VERSION" = "$EXPECTED_VERSION" ]; then
+              echo "npm package version $EXPECTED_VERSION is available"
+              exit 0
+            fi
+            echo "Waiting for npm to serve $EXPECTED_VERSION (got ${PUBLISHED_VERSION:-<none>})"
+            sleep 10
+          done
+          echo "Timed out waiting for npm package version $EXPECTED_VERSION"
+          exit 1
 
       - name: Create GitHub Release
         if: steps.version.outputs.changed == 'true'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: |
             dist/jup-*
             dist/checksums.txt
+            scripts/install.sh
           generate_release_notes: true
-
-      - name: Publish to npm
-        if: steps.version.outputs.changed == 'true'
-        run: npm publish --access public --provenance
