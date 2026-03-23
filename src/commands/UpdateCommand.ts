@@ -8,7 +8,6 @@ import ky from "ky";
 import type { Command } from "commander";
 
 import { version as currentVersion } from "../../package.json";
-import installScript from "../../scripts/install.sh" with { type: "text" };
 import { Output } from "../lib/Output.ts";
 
 type InstallMethod = "npm" | "binary";
@@ -152,11 +151,14 @@ export class UpdateCommand {
   }
 
   private static async updateBinary(): Promise<void> {
+    const scriptUrl =
+      "https://github.com/jup-ag/cli/releases/latest/download/install.sh";
     const dir = await mkdtemp(join(tmpdir(), "jup-"));
     const scriptPath = join(dir, "install.sh");
 
     try {
-      await writeFile(scriptPath, installScript, { mode: 0o700 });
+      const script = await ky.get(scriptUrl).text();
+      await writeFile(scriptPath, script, { mode: 0o700 });
       execSync(`bash ${scriptPath}`, { stdio: "inherit" });
     } finally {
       await rm(dir, { recursive: true, force: true }).catch(() => {});
