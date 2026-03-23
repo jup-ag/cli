@@ -60,13 +60,7 @@ EXPECTED=$(grep "$ASSET" "$TMP_CHECKSUMS" | awk '{print $1}') || true
 if [ -z "$EXPECTED" ]; then
   error "No checksum found for $ASSET in checksums.txt"
 fi
-if command -v sha256sum &>/dev/null; then
-  ACTUAL=$(sha256sum "$TMP_BINARY" | awk '{print $1}')
-elif command -v shasum &>/dev/null; then
-  ACTUAL=$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')
-else
-  error "No sha256sum or shasum found. Cannot verify checksum."
-fi
+ACTUAL=$(sha256sum "$TMP_BINARY" | awk '{print $1}')
 if [ "$EXPECTED" != "$ACTUAL" ]; then
   error "Checksum verification failed. Expected $EXPECTED, got $ACTUAL"
 fi
