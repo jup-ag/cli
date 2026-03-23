@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { mkdtemp, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -21,82 +21,74 @@ export class UpdateCommand {
 
   private static async update(opts: { check?: boolean }): Promise<void> {
     const latestVersion = await this.getLatestVersion();
+    const isUpToDate = !this.isNewer(latestVersion, currentVersion);
 
-    if (!this.isNewer(latestVersion, currentVersion)) {
-      if (Output.isJson()) {
-        Output.json({
-          currentVersion,
-          latestVersion,
-          status: "up_to_date",
-        });
-      } else {
-        Output.table({
-          type: "vertical",
-          rows: [
-            { label: "Version", value: `v${currentVersion}` },
-            { label: "Status", value: chalk.green("Already up to date") },
-          ],
-        });
-      }
-      return;
+    if (isUpToDate) {
+      return this.output({
+        json: { currentVersion, latestVersion, status: "up_to_date" },
+        rows: [
+          { label: "Version", value: `v${currentVersion}` },
+          { label: "Status", value: chalk.green("Already up to date") },
+        ],
+      });
     }
 
     if (opts.check) {
-      if (Output.isJson()) {
-        Output.json({
-          currentVersion,
-          latestVersion,
-          status: "update_available",
-        });
-      } else {
-        Output.table({
-          type: "vertical",
-          rows: [
-            { label: "Current Version", value: `v${currentVersion}` },
-            {
-              label: "Latest Version",
-              value: chalk.green(`v${latestVersion}`),
-            },
-            { label: "Status", value: "Update available" },
-          ],
-        });
-      }
-      return;
+      return this.output({
+        json: { currentVersion, latestVersion, status: "update_available" },
+        rows: [
+          { label: "Current Version", value: `v${currentVersion}` },
+          {
+            label: "Latest Version",
+            value: chalk.green(`v${latestVersion}`),
+          },
+          { label: "Status", value: "Update available" },
+        ],
+      });
     }
 
     if (!Output.isJson()) {
       console.log(`Updating to v${latestVersion}...`);
     }
 
-    await this.runInstallScript();
+    await this.runInstallScript(latestVersion);
 
+    this.output({
+      json: { currentVersion, latestVersion, status: "updated" },
+      rows: [
+        { label: "Previous Version", value: `v${currentVersion}` },
+        {
+          label: "New Version",
+          value: chalk.green(`v${latestVersion}`),
+        },
+        { label: "Status", value: chalk.green("Updated successfully") },
+      ],
+    });
+  }
+
+  private static output(opts: {
+    json: Record<string, string>;
+    rows: { label: string; value: string }[];
+  }): void {
     if (Output.isJson()) {
-      Output.json({
-        currentVersion,
-        latestVersion,
-        status: "updated",
-      });
+      Output.json(opts.json);
     } else {
-      Output.table({
-        type: "vertical",
-        rows: [
-          { label: "Previous Version", value: `v${currentVersion}` },
-          {
-            label: "New Version",
-            value: chalk.green(`v${latestVersion}`),
-          },
-          { label: "Status", value: chalk.green("Updated successfully") },
-        ],
-      });
+      Output.table({ type: "vertical", rows: opts.rows });
     }
   }
 
   private static async getLatestVersion(): Promise<string> {
-    const release = await ky
-      .get("https://api.github.com/repos/jup-ag/cli/releases/latest")
-      .json<{ tag_name: string }>();
+    try {
+      const release = await ky
+        .get("https://api.github.com/repos/jup-ag/cli/releases/latest")
+        .json<{ tag_name: string }>();
 
-    return release.tag_name.replace(/^v/, "");
+      return release.tag_name.replace(/^v/, "");
+    } catch {
+      throw new Error(
+        "Failed to check for updates. Please check your internet connection and try again."
+      );
+    }
   }
 
   private static isNewer(latest: string, current: string): boolean {
@@ -113,18 +105,21 @@ export class UpdateCommand {
     return false;
   }
 
-  private static async runInstallScript(): Promise<void> {
-    const scriptUrl =
-      "https://raw.githubusercontent.com/jup-ag/cli/main/scripts/install.sh";
+  private static async runInstallScript(version: string): Promise<void> {
+    const scriptUrl = `https://raw.githubusercontent.com/jup-ag/cli/v${version}/scripts/install.sh`;
     const dir = await mkdtemp(join(tmpdir(), "jup-"));
     const scriptPath = join(dir, "install.sh");
 
     try {
       const script = await ky.get(scriptUrl).text();
       await writeFile(scriptPath, script, { mode: 0o700 });
-      execSync(`bash ${scriptPath}`, { stdio: "inherit" });
+      execFileSync("bash", [scriptPath], { stdio: "inherit" });
+    } catch {
+      throw new Error(
+        "Update failed. Run `jup update` again or install manually from https://github.com/jup-ag/cli/releases"
+      );
     } finally {
-      await rm(dir, { recursive: true, force: true }).catch(() => {});
+      rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   }
 }

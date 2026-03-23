@@ -46,26 +46,38 @@ URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
 
 CHECKSUM_URL="https://github.com/${REPO}/releases/latest/download/checksums.txt"
 
+TMP_DIR=$(mktemp -d)
+TMP_BINARY="${TMP_DIR}/${BINARY}"
+TMP_CHECKSUMS="${TMP_DIR}/checksums.txt"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
 info "Downloading $URL..."
-curl -fsSL "$URL" -o "/tmp/${BINARY}"
-curl -fsSL "$CHECKSUM_URL" -o "/tmp/checksums.txt"
+curl -fsSL "$URL" -o "$TMP_BINARY"
+curl -fsSL "$CHECKSUM_URL" -o "$TMP_CHECKSUMS"
 
 info "Verifying checksum..."
-EXPECTED=$(grep "$ASSET" /tmp/checksums.txt | awk '{print $1}')
-ACTUAL=$(sha256sum "/tmp/${BINARY}" | awk '{print $1}')
+EXPECTED=$(grep "$ASSET" "$TMP_CHECKSUMS" | awk '{print $1}') || true
+if [ -z "$EXPECTED" ]; then
+  error "No checksum found for $ASSET in checksums.txt"
+fi
+if command -v sha256sum &>/dev/null; then
+  ACTUAL=$(sha256sum "$TMP_BINARY" | awk '{print $1}')
+elif command -v shasum &>/dev/null; then
+  ACTUAL=$(shasum -a 256 "$TMP_BINARY" | awk '{print $1}')
+else
+  error "No sha256sum or shasum found. Cannot verify checksum."
+fi
 if [ "$EXPECTED" != "$ACTUAL" ]; then
-  rm -f "/tmp/${BINARY}" "/tmp/checksums.txt"
   error "Checksum verification failed. Expected $EXPECTED, got $ACTUAL"
 fi
-rm -f /tmp/checksums.txt
 
-chmod +x "/tmp/${BINARY}"
+chmod +x "$TMP_BINARY"
 
 if [ -w "$INSTALL_DIR" ]; then
-  mv "/tmp/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  mv "$TMP_BINARY" "${INSTALL_DIR}/${BINARY}"
 else
   info "Elevated permissions required to install to $INSTALL_DIR"
-  sudo mv "/tmp/${BINARY}" "${INSTALL_DIR}/${BINARY}"
+  sudo mv "$TMP_BINARY" "${INSTALL_DIR}/${BINARY}"
 fi
 
 info "Installed $BINARY to ${INSTALL_DIR}/${BINARY}"
