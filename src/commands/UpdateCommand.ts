@@ -1,7 +1,7 @@
 import { execSync } from "child_process";
-import { createHash } from "crypto";
-import { chmod, rename, rm, writeFile } from "fs/promises";
-import { basename } from "path";
+import { rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 
 import chalk from "chalk";
 import ky from "ky";
@@ -77,7 +77,7 @@ export class UpdateCommand {
         stdio: "inherit",
       });
     } else {
-      await this.updateBinary(latestVersion);
+      await this.updateBinary();
     }
 
     if (Output.isJson()) {
@@ -150,65 +150,17 @@ export class UpdateCommand {
     return `npm install -g @jup-ag/cli@${version}`;
   }
 
-  private static async updateBinary(version: string): Promise<void> {
-    const binaryPath = process.execPath;
-    const execName = basename(binaryPath);
-
-    if (execName === "bun" || execName === "node") {
-      throw new Error(
-        "Cannot self-update: process.execPath points to the runtime, not the jup binary"
-      );
-    }
-
-    const assetName = `jup-${process.platform}-${process.arch}`;
-    const baseUrl = `https://github.com/jup-ag/cli/releases/download/v${version}`;
-
-    // Fetch checksums first to validate platform support before downloading
-    const checksums = await ky.get(`${baseUrl}/checksums.txt`).text();
-    const checksumLine = checksums
-      .split("\n")
-      .map((line) => line.trim().split(/\s+/))
-      .find((parts) => parts.length === 2 && parts[1] === assetName);
-
-    if (!checksumLine) {
-      const supported = checksums
-        .split("\n")
-        .map((line) => line.trim().split(/\s+/))
-        .filter((parts) => parts.length === 2)
-        .map((parts) => parts[1]!.replace("jup-", ""))
-        .join(", ");
-      throw new Error(
-        `Unsupported platform: ${process.platform}-${process.arch}. ` +
-          `Supported: ${supported}`
-      );
-    }
-
-    const binary = await ky.get(`${baseUrl}/${assetName}`).arrayBuffer();
-    const buf = Buffer.from(binary);
-
-    const expectedHash = checksumLine[0];
-    const actualHash = createHash("sha256").update(buf).digest("hex");
-
-    if (actualHash !== expectedHash) {
-      throw new Error(
-        `Checksum mismatch for ${assetName}: expected ${expectedHash}, got ${actualHash}`
-      );
-    }
-
-    const tmpPath = `${binaryPath}.tmp`;
+  private static async updateBinary(): Promise<void> {
+    const scriptUrl =
+      "https://github.com/jup-ag/cli/releases/latest/download/install.sh";
+    const scriptPath = join(tmpdir(), "jup-install.sh");
 
     try {
-      await writeFile(tmpPath, buf);
-      await chmod(tmpPath, 0o755);
-      await rename(tmpPath, binaryPath);
-    } catch (err: unknown) {
-      await rm(tmpPath, { force: true }).catch(() => {});
-      if (err instanceof Error && "code" in err && err.code === "EACCES") {
-        throw new Error(
-          "Permission denied. Try running with sudo: sudo jup update"
-        );
-      }
-      throw err;
+      const script = await ky.get(scriptUrl).text();
+      await writeFile(scriptPath, script);
+      execSync(`bash ${scriptPath}`, { stdio: "inherit" });
+    } finally {
+      await rm(scriptPath, { force: true }).catch(() => {});
     }
   }
 }

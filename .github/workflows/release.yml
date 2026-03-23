@@ -76,6 +76,7 @@ jobs:
           files: |
             dist/jup-*
             dist/checksums.txt
+            scripts/install.sh
           generate_release_notes: true
 
       - name: Publish to npm
