@@ -136,6 +136,62 @@ export type ExecuteOrderResponse = {
   signature: string;
 };
 
+export type ClaimPositionResponse = {
+  transaction: string;
+  txMeta: { blockhash: string; lastValidBlockHeight: string };
+  position: {
+    positionPubkey: string;
+    marketPubkey: string;
+    userPubkey: string;
+    ownerPubkey: string;
+    isYes: boolean;
+    contracts: string;
+    payoutAmountUsd: string;
+  };
+};
+
+export type CloseAllPositionsResponse = {
+  data: (CreateOrderResponse | ClaimPositionResponse)[];
+};
+
+export type HistoryEvent = {
+  id: number;
+  eventType: string;
+  signature: string;
+  slot: string;
+  timestamp: number;
+  orderPubkey: string;
+  positionPubkey: string;
+  marketId: string;
+  ownerPubkey: string;
+  keeperPubkey: string;
+  isBuy: boolean;
+  isYes: boolean;
+  contracts: string;
+  filledContracts: string;
+  maxFillPriceUsd: string;
+  avgFillPriceUsd: string;
+  realizedPnl: string | null;
+  payoutAmountUsd: string;
+  marketMetadata: {
+    title: string;
+    status: string;
+    result: string | null;
+  };
+  eventMetadata: {
+    title: string;
+    subtitle: string;
+    slug: string;
+    imageUrl: string;
+    isLive: boolean;
+  };
+};
+
+export type GetHistoryResponse = {
+  data: HistoryEvent[];
+  pagination: Pagination;
+};
+
 export class PredictionsClient {
   static readonly #ky = ky.create({
     prefixUrl: `${ClientConfig.host}/prediction/v1`,
@@ -203,5 +259,50 @@ export class PredictionsClient {
     signedTransaction: string;
   }): Promise<ExecuteOrderResponse> {
     return this.#ky.post("orders/execute", { json: req }).json();
+  }
+
+  public static async closePosition(
+    positionPubkey: string,
+    ownerPubkey: string
+  ): Promise<CreateOrderResponse> {
+    return this.#ky
+      .delete(`positions/${positionPubkey}`, { json: { ownerPubkey } })
+      .json();
+  }
+
+  public static async closeAllPositions(
+    ownerPubkey: string
+  ): Promise<CloseAllPositionsResponse> {
+    return this.#ky
+      .delete("positions", {
+        json: { ownerPubkey, minSellPriceSlippageBps: 200 },
+      })
+      .json();
+  }
+
+  public static async getHistory(params: {
+    ownerPubkey: string;
+    start?: number;
+    end?: number;
+  }): Promise<GetHistoryResponse> {
+    const searchParams: Record<string, string | number> = {
+      ownerPubkey: params.ownerPubkey,
+    };
+    if (params.start !== undefined) {
+      searchParams.start = params.start;
+    }
+    if (params.end !== undefined) {
+      searchParams.end = params.end;
+    }
+    return this.#ky.get("history", { searchParams }).json();
+  }
+
+  public static async claimPosition(
+    positionPubkey: string,
+    ownerPubkey: string
+  ): Promise<ClaimPositionResponse> {
+    return this.#ky
+      .post(`positions/${positionPubkey}/claim`, { json: { ownerPubkey } })
+      .json();
   }
 }

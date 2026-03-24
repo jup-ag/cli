@@ -714,9 +714,11 @@ export class PerpsCommand {
         return;
       }
 
-      console.log(
-        `Closed ${sigs.length} position(s):\n${sigs.map((t) => `  ${t}`).join("\n")}`
-      );
+      Output.table({
+        type: "horizontal",
+        headers: { signature: "Tx Signature" },
+        rows: sigs.map((s) => ({ signature: s })),
+      });
       return;
     }
 

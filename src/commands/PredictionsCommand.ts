@@ -2,7 +2,11 @@ import type { Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
 
-import { PredictionsClient } from "../clients/PredictionsClient.ts";
+import {
+  PredictionsClient,
+  type ClaimPositionResponse,
+  type CreateOrderResponse,
+} from "../clients/PredictionsClient.ts";
 import { resolveWalletAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
@@ -49,6 +53,23 @@ export class PredictionsCommand {
       .option("--input <token>", "Input token (symbol or mint)", "USDC")
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.open(opts));
+    predictions
+      .command("close")
+      .description("Close or claim a prediction position")
+      .requiredOption(
+        "--position <pubkey>",
+        "Position pubkey to close, or 'all'"
+      )
+      .option("--key <name>", "Key to use for signing")
+      .action((opts) => this.close(opts));
+    predictions
+      .command("history")
+      .description("View prediction trading history")
+      .option("--key <name>", "Key to use (overrides active key)")
+      .option("--address <address>", "Wallet address to look up")
+      .option("--limit <n>", "Max results", "10")
+      .option("--offset <n>", "Pagination offset", "0")
+      .action((opts) => this.history(opts));
   }
 
   private static async events(opts: {
@@ -192,10 +213,7 @@ export class PredictionsCommand {
       valueUsd: NumberConverter.fromMicroUsd(p.valueUsd),
       pnlUsd: NumberConverter.fromMicroUsd(p.pnlUsd),
       pnlPct: p.pnlUsdPercent,
-      claimable:
-        !p.claimed &&
-        p.marketMetadata.result !== null &&
-        p.marketMetadata.result === (p.isYes ? "yes" : "no"),
+      claimable: this.isClaimable(p),
     }));
 
     if (Output.isJson()) {
@@ -261,12 +279,7 @@ export class PredictionsCommand {
       depositMint: token.id,
     });
 
-    const signedTx = await signer.signTransaction(
-      res.transaction as Base64EncodedBytes
-    );
-    const result = await PredictionsClient.postExecute({
-      signedTransaction: signedTx,
-    });
+    const result = await this.signAndExecute(signer, res.transaction);
 
     const { order } = res;
     const contracts = Number(order.contracts);
@@ -313,6 +326,255 @@ export class PredictionsCommand {
         { label: "Tx Signature", value: result.signature },
       ],
     });
+  }
+
+  private static async history(opts: {
+    key?: string;
+    address?: string;
+    limit: string;
+    offset: string;
+  }): Promise<void> {
+    if (opts.address && opts.key) {
+      throw new Error("Only one of --address or --key can be provided.");
+    }
+
+    const start = Number(opts.offset);
+    const limit = Number(opts.limit);
+    const end = start + limit;
+
+    const address =
+      opts.address ??
+      (await Signer.load(opts.key ?? Config.load().activeKey)).address;
+
+    const res = await PredictionsClient.getHistory({
+      ownerPubkey: address,
+      start,
+      end,
+    });
+
+    const history = res.data.map((h) => ({
+      time: new Date(h.timestamp * 1000).toISOString(),
+      event: h.eventMetadata.title,
+      market: h.marketMetadata.title,
+      type: h.eventType,
+      side: h.isYes ? "yes" : "no",
+      action: h.isBuy ? "buy" : "sell",
+      contracts: Number(h.filledContracts),
+      avgPriceUsd: NumberConverter.fromMicroUsd(h.avgFillPriceUsd),
+      pnlUsd: h.realizedPnl
+        ? NumberConverter.fromMicroUsd(h.realizedPnl)
+        : null,
+      payoutUsd: NumberConverter.fromMicroUsd(h.payoutAmountUsd),
+      positionPubkey: h.positionPubkey,
+      signature: h.signature,
+    }));
+
+    if (Output.isJson()) {
+      const json: Record<string, unknown> = { count: history.length, history };
+      if (res.pagination.hasNext) {
+        json.next = res.pagination.end;
+      }
+      Output.json(json);
+      return;
+    }
+
+    if (history.length === 0) {
+      console.log("No history found.");
+      return;
+    }
+
+    Output.table({
+      type: "horizontal",
+      headers: {
+        time: "Time",
+        event: "Event / Market",
+        side: "Side",
+        action: "Action",
+        avgPrice: "Avg Price",
+        pnl: "PnL",
+        signature: "Tx Signature",
+      },
+      rows: history.map((h) => {
+        const sideColor = h.side === "yes" ? chalk.green : chalk.red;
+        return {
+          time: this.formatDate(h.time),
+          event: h.event + chalk.gray("\n└─► ") + h.market,
+          side: sideColor(h.side),
+          action: h.action,
+          avgPrice: Output.formatDollar(h.avgPriceUsd),
+          pnl: h.pnlUsd
+            ? Output.formatDollarChange(h.pnlUsd)
+            : chalk.gray("\u2014"),
+          signature: h.signature,
+        };
+      }),
+    });
+
+    if (res.pagination.hasNext) {
+      console.log("\nNext offset:", res.pagination.end);
+    }
+  }
+
+  private static isClaimable(p: {
+    claimed: boolean;
+    isYes: boolean;
+    marketMetadata: { result: "yes" | "no" | null };
+  }): boolean {
+    return (
+      !p.claimed &&
+      p.marketMetadata.result !== null &&
+      p.marketMetadata.result === (p.isYes ? "yes" : "no")
+    );
+  }
+
+  private static async signAndExecute(
+    signer: Signer,
+    transaction: string
+  ): Promise<{ signature: string }> {
+    const signedTx = await signer.signTransaction(
+      transaction as Base64EncodedBytes
+    );
+    return PredictionsClient.postExecute({ signedTransaction: signedTx });
+  }
+
+  private static async close(opts: {
+    position: string;
+    key?: string;
+  }): Promise<void> {
+    const signer = await Signer.load(opts.key ?? Config.load().activeKey);
+
+    if (opts.position === "all") {
+      const res = await PredictionsClient.closeAllPositions(signer.address);
+
+      if (res.data.length === 0) {
+        throw new Error("No open positions to close.");
+      }
+
+      const results: {
+        action: string;
+        positionPubkey: string;
+        signature: string;
+      }[] = [];
+
+      for (const item of res.data) {
+        const execResult = await this.signAndExecute(signer, item.transaction);
+        const isClaim = "position" in item;
+        const pubkey = isClaim
+          ? (item as ClaimPositionResponse).position.positionPubkey
+          : (item as CreateOrderResponse).order.positionPubkey;
+        results.push({
+          action: isClaim ? "claim" : "close",
+          positionPubkey: pubkey,
+          signature: execResult.signature,
+        });
+      }
+
+      if (Output.isJson()) {
+        Output.json({ action: "close-all", results });
+        return;
+      }
+
+      Output.table({
+        type: "horizontal",
+        headers: {
+          action: "Action",
+          positionPubkey: "Position",
+          signature: "Tx Signature",
+        },
+        rows: results,
+      });
+      return;
+    }
+
+    // Single position
+    const position = await PredictionsClient.getPosition(opts.position);
+    const claimable = this.isClaimable(position);
+
+    if (claimable) {
+      const res = await PredictionsClient.claimPosition(
+        opts.position,
+        signer.address
+      );
+      const result = await this.signAndExecute(signer, res.transaction);
+
+      const contracts = Number(res.position.contracts);
+      const payoutUsd = NumberConverter.fromMicroUsd(
+        res.position.payoutAmountUsd
+      );
+
+      if (Output.isJson()) {
+        Output.json({
+          action: "claim",
+          event: position.eventMetadata.title,
+          market: position.marketMetadata.title,
+          side: position.isYes ? "yes" : "no",
+          positionPubkey: opts.position,
+          contracts,
+          payoutUsd,
+          signature: result.signature,
+        });
+        return;
+      }
+
+      Output.table({
+        type: "vertical",
+        rows: [
+          { label: "Action", value: "Claim Position" },
+          { label: "Event", value: position.eventMetadata.title },
+          { label: "Market", value: position.marketMetadata.title },
+          {
+            label: "Side",
+            value: position.isYes ? chalk.green("yes") : chalk.red("no"),
+          },
+          { label: "Payout", value: Output.formatDollar(payoutUsd) },
+          { label: "Position", value: opts.position },
+          { label: "Tx Signature", value: result.signature },
+        ],
+      });
+    } else {
+      const res = await PredictionsClient.closePosition(
+        opts.position,
+        signer.address
+      );
+      const result = await this.signAndExecute(signer, res.transaction);
+
+      const { order } = res;
+      const contracts = Number(order.contracts);
+      const costUsd = NumberConverter.fromMicroUsd(order.orderCostUsd);
+      const feeUsd = NumberConverter.fromMicroUsd(order.estimatedTotalFeeUsd);
+
+      if (Output.isJson()) {
+        Output.json({
+          action: "close",
+          event: position.eventMetadata.title,
+          market: position.marketMetadata.title,
+          side: position.isYes ? "yes" : "no",
+          positionPubkey: opts.position,
+          contracts,
+          costUsd,
+          feeUsd,
+          signature: result.signature,
+        });
+        return;
+      }
+
+      Output.table({
+        type: "vertical",
+        rows: [
+          { label: "Action", value: "Close Position" },
+          { label: "Event", value: position.eventMetadata.title },
+          { label: "Market", value: position.marketMetadata.title },
+          {
+            label: "Side",
+            value: position.isYes ? chalk.green("yes") : chalk.red("no"),
+          },
+          { label: "Cost", value: Output.formatDollar(costUsd) },
+          { label: "Fee", value: Output.formatDollar(feeUsd) },
+          { label: "Position", value: opts.position },
+          { label: "Tx Signature", value: result.signature },
+        ],
+      });
+    }
   }
 
   private static formatPricePct(price: number | null): string {
