@@ -81,4 +81,11 @@ export class NumberConverter {
     );
   }
 
+  public static fromMicroUsd(amount: string | number): number {
+    return Number(this.fromChainAmount(amount.toString(), 6));
+  }
+
+  public static toMicroUsd(amount: string): string {
+    return this.toChainAmount(amount, 6);
+  }
 }

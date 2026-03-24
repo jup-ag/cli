@@ -13,7 +13,7 @@ import {
   type GetHoldingsResponse,
   type HoldingsTokenAccount,
 } from "../clients/UltraClient.ts";
-import { Asset } from "../lib/Asset.ts";
+import { Asset, resolveWalletAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
@@ -234,7 +234,7 @@ export class SpotCommand {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
     const [inputToken, outputToken] = await Promise.all([
-      this.resolveWalletToken(opts.from, signer.address),
+      resolveWalletAsset(signer.address, opts.from),
       DatapiClient.resolveToken(opts.to),
     ]);
 
@@ -450,7 +450,7 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const token = await this.resolveWalletToken(opts.token, signer.address);
+    const token = await resolveWalletAsset(signer.address, opts.token);
     const multiplier = Swap.getScaledUiMultiplier(token);
     const chainAmount =
       opts.rawAmount ??
@@ -799,20 +799,6 @@ export class SpotCommand {
         })),
       ],
     });
-  }
-
-  private static async resolveWalletToken(
-    input: string,
-    walletAddress: string
-  ): Promise<Token> {
-    if (isAddress(input)) {
-      return DatapiClient.resolveToken(input);
-    }
-    const holdings = await UltraClient.getHoldings(walletAddress);
-    return this.resolveTokenFromHoldings(
-      input,
-      this.getHoldingsMints(holdings)
-    );
   }
 
   private static async resolveTokenFromHoldings(

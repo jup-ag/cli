@@ -73,6 +73,69 @@ export type GetEventsResponse = {
   pagination: Pagination;
 };
 
+export type PredictionPosition = {
+  pubkey: string;
+  ownerPubkey: string;
+  marketId: string;
+  isYes: boolean;
+  contracts: string;
+  totalCostUsd: number;
+  valueUsd: number;
+  pnlUsd: number;
+  pnlUsdPercent: number;
+  claimed: boolean;
+  claimedUsd: number;
+  openedAt: string;
+  updatedAt: string;
+  eventMetadata: { title: string };
+  marketMetadata: {
+    title: string;
+    status: string;
+    result: "yes" | "no" | null;
+  };
+};
+
+export type GetPositionsResponse = {
+  data: PredictionPosition[];
+  pagination: Pagination;
+};
+
+export type OrderDetails = {
+  orderPubkey: string;
+  orderAtaPubkey: string;
+  userPubkey: string;
+  marketId: string;
+  marketIdHash: string;
+  positionPubkey: string;
+  isBuy: boolean;
+  isYes: boolean;
+  contracts: string;
+  newContracts: string;
+  maxBuyPriceUsd: string | null;
+  minSellPriceUsd: string | null;
+  externalOrderId: string;
+  orderCostUsd: string;
+  newAvgPriceUsd: string;
+  newSizeUsd: string;
+  newPayoutUsd: string;
+  estimatedProtocolFeeUsd: string;
+  estimatedVenueFeeUsd: string;
+  estimatedIntegratorFeeUsd: string;
+  estimatedTotalFeeUsd: string;
+};
+
+export type CreateOrderResponse = {
+  transaction: string;
+  txMeta: { blockhash: string; lastValidBlockHeight: string };
+  externalOrderId: string;
+  requiredSigners: string[];
+  order: OrderDetails;
+};
+
+export type ExecuteOrderResponse = {
+  signature: string;
+};
+
 export class PredictionsClient {
   static readonly #ky = ky.create({
     prefixUrl: `${ClientConfig.host}/prediction/v1`,
@@ -109,5 +172,36 @@ export class PredictionsClient {
       searchParams.end = params.end;
     }
     return this.#ky.get("events", { searchParams }).json();
+  }
+
+  public static async getPositions(
+    ownerPubkey: string
+  ): Promise<GetPositionsResponse> {
+    return this.#ky.get("positions", { searchParams: { ownerPubkey } }).json();
+  }
+
+  public static async getPosition(
+    positionPubkey: string
+  ): Promise<PredictionPosition> {
+    return this.#ky.get(`positions/${positionPubkey}`).json();
+  }
+
+  public static async postOrder(req: {
+    isBuy: boolean;
+    ownerPubkey: string;
+    marketId: string;
+    isYes: boolean;
+    depositAmount: string;
+    depositMint?: string;
+  }): Promise<CreateOrderResponse> {
+    return this.#ky
+      .post("orders", { json: { ...req, skipSigning: true } })
+      .json();
+  }
+
+  public static async postExecute(req: {
+    signedTransaction: string;
+  }): Promise<ExecuteOrderResponse> {
+    return this.#ky.post("orders/execute", { json: req }).json();
   }
 }

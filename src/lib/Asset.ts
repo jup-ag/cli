@@ -1,4 +1,7 @@
-import { address } from "@solana/kit";
+import { address, isAddress } from "@solana/kit";
+
+import { DatapiClient, type Token } from "../clients/DatapiClient.ts";
+import { UltraClient } from "../clients/UltraClient.ts";
 
 type AssetInfo = {
   readonly id: ReturnType<typeof address>;
@@ -33,4 +36,39 @@ export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {
     throw new Error(`Unknown asset: ${name}`);
   }
   return asset;
+}
+
+export async function resolveWalletAsset(
+  walletAddress: string,
+  asset: string
+): Promise<Token> {
+  if (isAddress(asset)) {
+    return DatapiClient.resolveToken(asset);
+  }
+
+  const key = asset.toUpperCase();
+  // Prevent full holdings lookup for well-known tokens
+  if (key in Asset) {
+    return DatapiClient.resolveToken(Asset[key as keyof typeof Asset].id);
+  }
+
+  const holdings = await UltraClient.getHoldings(walletAddress);
+  const mints = Object.keys(holdings.tokens);
+  if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
+    mints.push(Asset.SOL.id);
+  }
+  const tokens = await DatapiClient.getTokensByMints(mints);
+  const query = asset.toLowerCase();
+  const matches = tokens.filter((t) => t.symbol.toLowerCase() === query);
+
+  if (matches.length === 0) {
+    throw new Error(`Token "${asset}" not found in wallet.`);
+  }
+  if (matches.length === 1) {
+    return matches[0]!;
+  }
+  const options = matches.map((t) => `  - ${t.symbol} (${t.id})`).join("\n");
+  throw new Error(
+    `Multiple tokens matching "${asset}" found in wallet. Use the mint address instead:\n${options}`
+  );
 }

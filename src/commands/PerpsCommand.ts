@@ -133,18 +133,18 @@ export class PerpsCommand {
           asset: p.asset,
           side: p.side,
           leverage: Number(p.leverage),
-          sizeUsd: Number(PerpsClient.fromUsdRaw(p.sizeUsd)),
-          entryPriceUsd: Number(PerpsClient.fromUsdRaw(p.entryPriceUsd)),
-          markPriceUsd: Number(PerpsClient.fromUsdRaw(p.markPriceUsd)),
+          sizeUsd: NumberConverter.fromMicroUsd(p.sizeUsd),
+          entryPriceUsd: NumberConverter.fromMicroUsd(p.entryPriceUsd),
+          markPriceUsd: NumberConverter.fromMicroUsd(p.markPriceUsd),
           pnlPct: Number(p.pnlAfterFeesPct),
-          liquidationPriceUsd: Number(
-            PerpsClient.fromUsdRaw(p.liquidationPriceUsd)
+          liquidationPriceUsd: NumberConverter.fromMicroUsd(
+            p.liquidationPriceUsd
           ),
           tpsl: p.tpslRequests.map((t) => ({
             pubkey: t.positionRequestPubkey,
             type: t.requestType,
             triggerPriceUsd: t.triggerPriceUsd
-              ? Number(PerpsClient.fromUsdRaw(t.triggerPriceUsd))
+              ? NumberConverter.fromMicroUsd(t.triggerPriceUsd)
               : null,
           })),
         })),
@@ -152,9 +152,9 @@ export class PerpsCommand {
           orderPubkey: o.positionRequestPubkey,
           asset: mintToName.get(o.marketMint) ?? o.marketMint,
           side: o.side,
-          sizeUsd: Number(PerpsClient.fromUsdRaw(o.sizeUsdDelta)),
+          sizeUsd: NumberConverter.fromMicroUsd(o.sizeUsdDelta),
           triggerPriceUsd: o.triggerPrice
-            ? Number(PerpsClient.fromUsdRaw(o.triggerPrice))
+            ? NumberConverter.fromMicroUsd(o.triggerPrice)
             : null,
         })),
       });
@@ -174,20 +174,18 @@ export class PerpsCommand {
           },
           {
             label: "Size",
-            value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(p.sizeUsd))
-            ),
+            value: Output.formatDollar(NumberConverter.fromMicroUsd(p.sizeUsd)),
           },
           {
             label: "Entry Price",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(p.entryPriceUsd))
+              NumberConverter.fromMicroUsd(p.entryPriceUsd)
             ),
           },
           {
             label: "Mark Price",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(p.markPriceUsd))
+              NumberConverter.fromMicroUsd(p.markPriceUsd)
             ),
           },
           {
@@ -197,19 +195,19 @@ export class PerpsCommand {
           {
             label: "Liq. Price",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(p.liquidationPriceUsd))
+              NumberConverter.fromMicroUsd(p.liquidationPriceUsd)
             ),
           },
           {
             label: "TP",
             value: tp
-              ? `${Output.formatDollar(tp.triggerPriceUsd ? Number(PerpsClient.fromUsdRaw(tp.triggerPriceUsd)) : undefined)} ${chalk.gray(`(${tp.positionRequestPubkey})`)}`
+              ? `${Output.formatDollar(tp.triggerPriceUsd ? NumberConverter.fromMicroUsd(tp.triggerPriceUsd) : undefined)} ${chalk.gray(`(${tp.positionRequestPubkey})`)}`
               : Output.formatDollar(undefined),
           },
           {
             label: "SL",
             value: sl
-              ? `${Output.formatDollar(sl.triggerPriceUsd ? Number(PerpsClient.fromUsdRaw(sl.triggerPriceUsd)) : undefined)} ${chalk.gray(`(${sl.positionRequestPubkey})`)}`
+              ? `${Output.formatDollar(sl.triggerPriceUsd ? NumberConverter.fromMicroUsd(sl.triggerPriceUsd) : undefined)} ${chalk.gray(`(${sl.positionRequestPubkey})`)}`
               : Output.formatDollar(undefined),
           },
         ];
@@ -237,11 +235,11 @@ export class PerpsCommand {
             mintToName.get(o.marketMint) ?? o.marketMint.slice(0, 8) + "...",
           side: o.side,
           size: Output.formatDollar(
-            Number(PerpsClient.fromUsdRaw(o.sizeUsdDelta))
+            NumberConverter.fromMicroUsd(o.sizeUsdDelta)
           ),
           trigger: Output.formatDollar(
             o.triggerPrice
-              ? Number(PerpsClient.fromUsdRaw(o.triggerPrice))
+              ? NumberConverter.fromMicroUsd(o.triggerPrice)
               : undefined
           ),
           pubkey: o.positionRequestPubkey,
@@ -328,12 +326,12 @@ export class PerpsCommand {
       inputDecimals
     );
     const sizeUsdDelta = opts.size
-      ? PerpsClient.toUsdRaw(opts.size)
+      ? NumberConverter.toMicroUsd(opts.size)
       : undefined;
 
     if (opts.limit) {
       // Limit order
-      const triggerPrice = PerpsClient.toUsdRaw(opts.limit);
+      const triggerPrice = NumberConverter.toMicroUsd(opts.limit);
       const res = await PerpsClient.postLimitOrder({
         asset,
         inputToken,
@@ -361,7 +359,7 @@ export class PerpsCommand {
           asset,
           side,
           triggerPriceUsd: Number(opts.limit),
-          sizeUsd: Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta)),
+          sizeUsd: NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta),
           leverage: Number(res.quote.leverage),
           signature: result.txid,
         });
@@ -381,7 +379,7 @@ export class PerpsCommand {
           {
             label: "Size",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta))
+              NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta)
             ),
           },
           { label: "Leverage", value: `${res.quote.leverage}x` },
@@ -398,14 +396,14 @@ export class PerpsCommand {
       if (opts.tp) {
         tpsl.push({
           receiveToken: inputToken,
-          triggerPrice: PerpsClient.toUsdRaw(opts.tp),
+          triggerPrice: NumberConverter.toMicroUsd(opts.tp),
           requestType: "tp",
         });
       }
       if (opts.sl) {
         tpsl.push({
           receiveToken: inputToken,
-          triggerPrice: PerpsClient.toUsdRaw(opts.sl),
+          triggerPrice: NumberConverter.toMicroUsd(opts.sl),
           requestType: "sl",
         });
       }
@@ -434,15 +432,15 @@ export class PerpsCommand {
           positionPubkey: res.positionPubkey,
           asset,
           side,
-          entryPriceUsd: Number(
-            PerpsClient.fromUsdRaw(res.quote.averagePriceUsd)
+          entryPriceUsd: NumberConverter.fromMicroUsd(
+            res.quote.averagePriceUsd
           ),
-          sizeUsd: Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta)),
+          sizeUsd: NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta),
           leverage: Number(res.quote.leverage),
-          liquidationPriceUsd: Number(
-            PerpsClient.fromUsdRaw(res.quote.liquidationPriceUsd)
+          liquidationPriceUsd: NumberConverter.fromMicroUsd(
+            res.quote.liquidationPriceUsd
           ),
-          openFeeUsd: Number(PerpsClient.fromUsdRaw(res.quote.openFeeUsd)),
+          openFeeUsd: NumberConverter.fromMicroUsd(res.quote.openFeeUsd),
           signature: result.txid,
         });
         return;
@@ -457,26 +455,26 @@ export class PerpsCommand {
           {
             label: "Entry Price",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(res.quote.averagePriceUsd))
+              NumberConverter.fromMicroUsd(res.quote.averagePriceUsd)
             ),
           },
           {
             label: "Size",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta))
+              NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta)
             ),
           },
           { label: "Leverage", value: `${res.quote.leverage}x` },
           {
             label: "Liq. Price",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(res.quote.liquidationPriceUsd))
+              NumberConverter.fromMicroUsd(res.quote.liquidationPriceUsd)
             ),
           },
           {
             label: "Open Fee",
             value: Output.formatDollar(
-              Number(PerpsClient.fromUsdRaw(res.quote.openFeeUsd))
+              NumberConverter.fromMicroUsd(res.quote.openFeeUsd)
             ),
           },
           { label: "Tx Signature", value: result.txid },
@@ -513,7 +511,7 @@ export class PerpsCommand {
       // Update limit order trigger price
       const res = await PerpsClient.patchLimitOrder({
         positionRequestPubkey: opts.order,
-        triggerPrice: PerpsClient.toUsdRaw(opts.limit!),
+        triggerPrice: NumberConverter.toMicroUsd(opts.limit!),
       });
       if (!res.serializedTxBase64) {
         throw new Error("API returned no transaction for limit order update.");
@@ -581,7 +579,7 @@ export class PerpsCommand {
         // Update existing
         const res = await PerpsClient.patchTpsl({
           positionRequestPubkey: existing.positionRequestPubkey,
-          triggerPrice: PerpsClient.toUsdRaw(price),
+          triggerPrice: NumberConverter.toMicroUsd(price),
         });
         const result = await this.signAndExecute(
           signer,
@@ -602,7 +600,7 @@ export class PerpsCommand {
           tpsl: [
             {
               receiveToken: position.collateralToken,
-              triggerPrice: PerpsClient.toUsdRaw(price),
+              triggerPrice: NumberConverter.toMicroUsd(price),
               requestType: type,
               entirePosition: true,
             },
@@ -739,7 +737,9 @@ export class PerpsCommand {
     const res = await PerpsClient.postDecreasePosition({
       positionPubkey: opts.position!,
       receiveToken,
-      sizeUsdDelta: opts.size ? PerpsClient.toUsdRaw(opts.size) : undefined,
+      sizeUsdDelta: opts.size
+        ? NumberConverter.toMicroUsd(opts.size)
+        : undefined,
       entirePosition: entirePosition || undefined,
       maxSlippageBps: opts.slippage,
     });
@@ -760,14 +760,12 @@ export class PerpsCommand {
       Output.json({
         action: entirePosition ? "close-position" : "decrease-position",
         positionPubkey: res.positionPubkey,
-        sizeReducedUsd: Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta)),
-        pnlUsd: Number(PerpsClient.fromUsdRaw(res.quote.pnlAfterFeesUsd)),
+        sizeReducedUsd: NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta),
+        pnlUsd: NumberConverter.fromMicroUsd(res.quote.pnlAfterFeesUsd),
         pnlPct: Number(res.quote.pnlAfterFeesPercent),
         received: `${receivedAmount} ${receiveToken}`,
-        receivedUsd: Number(
-          PerpsClient.fromUsdRaw(res.quote.transferAmountUsd)
-        ),
-        feesUsd: Number(PerpsClient.fromUsdRaw(res.quote.totalFeeUsd)),
+        receivedUsd: NumberConverter.fromMicroUsd(res.quote.transferAmountUsd),
+        feesUsd: NumberConverter.fromMicroUsd(res.quote.totalFeeUsd),
         signature: result.txid,
       });
       return;
@@ -783,21 +781,21 @@ export class PerpsCommand {
         {
           label: "Size Reduced",
           value: Output.formatDollar(
-            Number(PerpsClient.fromUsdRaw(res.quote.sizeUsdDelta))
+            NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta)
           ),
         },
         {
           label: "PnL",
-          value: `${Output.formatDollar(Number(PerpsClient.fromUsdRaw(res.quote.pnlAfterFeesUsd)))} (${Output.formatPercentageChange(Number(res.quote.pnlAfterFeesPercent))})`,
+          value: `${Output.formatDollar(NumberConverter.fromMicroUsd(res.quote.pnlAfterFeesUsd))} (${Output.formatPercentageChange(Number(res.quote.pnlAfterFeesPercent))})`,
         },
         {
           label: "Received",
-          value: `${receivedAmount} ${receiveToken} (${Output.formatDollar(Number(PerpsClient.fromUsdRaw(res.quote.transferAmountUsd)))})`,
+          value: `${receivedAmount} ${receiveToken} (${Output.formatDollar(NumberConverter.fromMicroUsd(res.quote.transferAmountUsd))})`,
         },
         {
           label: "Fees",
           value: Output.formatDollar(
-            Number(PerpsClient.fromUsdRaw(res.quote.totalFeeUsd))
+            NumberConverter.fromMicroUsd(res.quote.totalFeeUsd)
           ),
         },
         { label: "Tx Signature", value: result.txid },

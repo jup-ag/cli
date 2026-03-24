@@ -1,7 +1,6 @@
 import ky from "ky";
 
-import { Asset, resolveAsset } from "../lib/Asset.ts";
-import { NumberConverter } from "../lib/NumberConverter.ts";
+import { resolveAsset } from "../lib/Asset.ts";
 import { ClientConfig } from "./ClientConfig.ts";
 
 export type MarketStatsResponse = {
@@ -237,14 +236,6 @@ export class PerpsClient {
     prefixUrl: "https://perps-api.jup.ag/v2",
     headers: ClientConfig.headers,
   });
-
-  public static toUsdRaw(amount: string): string {
-    return NumberConverter.toChainAmount(amount, Asset.USDC.decimals);
-  }
-
-  public static fromUsdRaw(amount: string): string {
-    return NumberConverter.fromChainAmount(amount, Asset.USDC.decimals);
-  }
 
   public static async getMarkets(): Promise<
     ({ asset: string } & MarketStatsResponse)[]
