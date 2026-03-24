@@ -59,6 +59,7 @@ jup lend earn positions
 [Read the docs](./docs/) for specific guides, examples, and workflows:
 
 - [Setup](docs/setup.md): Installation of the CLI
+- [Update](docs/update.md): Self-update the CLI
 - [Config](docs/config.md): CLI settings and configurations
 - [Keys](docs/keys.md): Private key management
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
