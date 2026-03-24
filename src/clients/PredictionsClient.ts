@@ -1,4 +1,4 @@
-import ky from "ky";
+import ky, { type SearchParamsOption } from "ky";
 
 import { ClientConfig } from "./ClientConfig.ts";
 
@@ -197,6 +197,30 @@ export class PredictionsClient {
     prefixUrl: `${ClientConfig.host}/prediction/v1`,
     headers: ClientConfig.headers,
   });
+
+  public static async searchEvents(params: {
+    query: string;
+    start?: number;
+    end?: number;
+  }): Promise<{ data: PredictionEvent[] }> {
+    const searchParams: SearchParamsOption = {
+      query: params.query,
+      includeMarkets: true,
+    };
+    if (params.start !== undefined) {
+      searchParams.start = params.start;
+    }
+    if (params.end !== undefined) {
+      searchParams.end = params.end;
+    }
+    return this.#ky.get("events/search", { searchParams }).json();
+  }
+
+  public static async getEvent(eventId: string): Promise<PredictionEvent> {
+    return this.#ky
+      .get(`events/${eventId}`, { searchParams: { includeMarkets: true } })
+      .json();
+  }
 
   public static async getEvents(params: {
     filter?: string;

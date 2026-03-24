@@ -6,6 +6,7 @@ import {
   PredictionsClient,
   type ClaimPositionResponse,
   type CreateOrderResponse,
+  type PredictionEvent,
 } from "../clients/PredictionsClient.ts";
 import { resolveWalletAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
@@ -21,6 +22,8 @@ export class PredictionsCommand {
     predictions
       .command("events")
       .description("Browse prediction events")
+      .option("--id <eventId>", "Look up a single event by ID")
+      .option("--search <query>", "Search events by title")
       .option("--filter <filter>", "Filter: new, live, trending")
       .option("--sort <sort>", "Sort by: volume, recent", "volume")
       .option(
@@ -73,29 +76,68 @@ export class PredictionsCommand {
   }
 
   private static async events(opts: {
+    id?: string;
+    search?: string;
     filter?: string;
     sort: string;
     category: string;
     offset: string;
     limit: string;
   }): Promise<void> {
-    const start = Number(opts.offset);
-    const limit = Number(opts.limit);
-    const end = start + limit;
+    const hasListingOpts =
+      opts.filter ||
+      opts.sort !== "volume" ||
+      opts.category !== "all" ||
+      opts.offset !== "0";
+    if (opts.id && (opts.search || hasListingOpts)) {
+      throw new Error(
+        "--id cannot be combined with --search, --filter, --sort, --category, or --offset."
+      );
+    }
+    if (opts.search && hasListingOpts) {
+      throw new Error(
+        "--search cannot be combined with --filter, --sort, --category, or --offset."
+      );
+    }
 
-    const sortBy = opts.sort === "recent" ? "beginAt" : "volume24hr";
-    const sortDirection = opts.sort === "recent" ? "desc" : undefined;
+    let data: PredictionEvent[];
+    let hasNext = false;
+    let nextOffset: number | undefined;
 
-    const res = await PredictionsClient.getEvents({
-      filter: opts.filter,
-      sortBy,
-      sortDirection,
-      category: opts.category,
-      start,
-      end,
-    });
+    if (opts.id) {
+      const event = await PredictionsClient.getEvent(opts.id);
+      data = [event];
+    } else if (opts.search) {
+      const start = Number(opts.offset);
+      const end = start + Number(opts.limit);
+      const res = await PredictionsClient.searchEvents({
+        query: opts.search,
+        start,
+        end,
+      });
+      data = res.data;
+    } else {
+      const start = Number(opts.offset);
+      const limit = Number(opts.limit);
+      const end = start + limit;
 
-    const events = res.data.map((e) => ({
+      const sortBy = opts.sort === "recent" ? "beginAt" : "volume24hr";
+      const sortDirection = opts.sort === "recent" ? "desc" : undefined;
+
+      const res = await PredictionsClient.getEvents({
+        filter: opts.filter,
+        sortBy,
+        sortDirection,
+        category: opts.category,
+        start,
+        end,
+      });
+      data = res.data;
+      hasNext = res.pagination.hasNext;
+      nextOffset = res.pagination.end;
+    }
+
+    const events = data.map((e) => ({
       id: e.eventId,
       title: e.metadata.title,
       category: e.category,
@@ -123,8 +165,8 @@ export class PredictionsCommand {
 
     if (Output.isJson()) {
       const json: Record<string, unknown> = { events };
-      if (res.pagination.hasNext) {
-        json.next = res.pagination.end;
+      if (hasNext) {
+        json.next = nextOffset;
       }
       Output.json(json);
       return;
@@ -163,8 +205,8 @@ export class PredictionsCommand {
       console.log();
     }
 
-    if (res.pagination.hasNext) {
-      console.log("Next offset:", res.pagination.end);
+    if (hasNext) {
+      console.log("Next offset:", nextOffset);
     }
   }
 
