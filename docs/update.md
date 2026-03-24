@@ -38,7 +38,7 @@ jup update --check
 
 // Updated
 {
-  "currentVersion": "0.3.0",
+  "currentVersion": "0.4.0",
   "latestVersion": "0.4.0",
   "status": "updated"
 }

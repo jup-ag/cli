@@ -33,6 +33,7 @@ bun run ci
 - `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
+- `UpdateCommand` — `update` (self-update CLI to latest version)
 
 **Libraries** (`src/lib/`):
 
