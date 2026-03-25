@@ -56,6 +56,10 @@ export class SpotCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
+      .option(
+        "--slippage <bps>",
+        "Max slippage in basis points (leave empty to use Jupiter's Real-Time Slippage Estimation)"
+      )
       .action((opts) => this.swap(opts));
     spot
       .command("portfolio")
@@ -228,8 +232,16 @@ export class SpotCommand {
     amount?: string;
     rawAmount?: string;
     key?: string;
+    slippage?: string;
   }): Promise<void> {
     Swap.validateAmountOpts(opts);
+
+    if (opts.slippage !== undefined) {
+      const bps = Number(opts.slippage);
+      if (!Number.isInteger(bps) || bps < 0) {
+        throw new Error("--slippage must be a non-negative integer (bps).");
+      }
+    }
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
@@ -244,6 +256,7 @@ export class SpotCommand {
       outputToken,
       amount: opts.amount,
       rawAmount: opts.rawAmount,
+      slippageBps: opts.slippage,
     });
 
     const networkFee = NumberConverter.fromChainAmount(

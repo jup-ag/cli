@@ -39,6 +39,7 @@ export class Swap {
     outputToken: Token;
     amount?: string;
     rawAmount?: string;
+    slippageBps?: string;
   }): Promise<SwapResult> {
     const { signer, inputToken, outputToken } = opts;
     const inputMultiplier = this.getScaledUiMultiplier(inputToken);
@@ -55,6 +56,7 @@ export class Swap {
           inputMultiplier
         ),
       taker: signer.address,
+      slippageBps: opts.slippageBps,
     });
 
     if (order.error) {

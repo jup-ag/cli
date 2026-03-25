@@ -54,9 +54,11 @@ jup spot quote --from <mint> --to <mint> --raw-amount 1000000000
 ```bash
 jup spot swap --from SOL --to USDC --amount 1
 jup spot swap --from SOL --to USDC --amount 1 --key mykey
+jup spot swap --from SOL --to USDC --amount 1 --slippage 50
 ```
 
 - `--key` overrides the active key for this transaction
+- `--slippage` sets max slippage in basis points (e.g. `50` = 0.5%). Recommended to be emtpy: Jupiter's Real-Time Slippage Estimation (RTSE) automatically picks an optimal value.
 
 ```js
 // Example JSON response:
