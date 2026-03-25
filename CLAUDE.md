@@ -24,7 +24,7 @@ bun run ci
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 5 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 6 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
@@ -32,6 +32,7 @@ bun run ci
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
 - `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
+- `PredictionsCommand` — `predictions events/positions/open/close/history`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
 - `UpdateCommand` — `update` (self-update CLI to latest version)
 
@@ -51,12 +52,15 @@ bun run ci
 - `UltraClient` — Jupiter Ultra swap API (quote + execute)
 - `PerpsClient` — Jupiter Perps API v2 (positions, orders, TP/SL)
 - `LendClient` — Jupiter Lend API (earn tokens, positions, earnings)
+- `PredictionsClient` — Jupiter Predictions API v1 (events, positions, orders, history)
 
 **Spot swap flow:** token search → Swap.execute → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
 
 **Perps flow:** PerpsClient.post* → Signer.signTransaction → PerpsClient.postExecute
 
 **Lend deposit/withdraw flow:** LendClient.getTokens → resolve jlToken → Swap.execute → LendClient.getPositions (updated state)
+
+**Predictions flow:** PredictionsClient.postOrder → Signer.signTransaction → PredictionsClient.postExecute
 
 ## CLI Conventions
 
@@ -71,7 +75,7 @@ When adding new commands, both input (options/arguments) and output (JSON/table)
 
 ### Output
 
-- **Field naming:** Reuse established key names — e.g. `sizeUsd`, `priceUsd`, `pnlUsd`, `pnlPct`, `feeUsd`, `signature`, `positionPubkey`, `side`, `asset`, `leverage`. Check `docs/perps.md` and `docs/spot.md` for the canonical JSON shapes.
+- **Field naming:** Reuse established key names — e.g. `sizeUsd`, `priceUsd`, `pnlUsd`, `pnlPct`, `feeUsd`, `signature`, `positionPubkey`, `side`, `asset`, `leverage`. Check `docs/perps.md`, `docs/spot.md`, and `docs/predictions.md` for the canonical JSON shapes.
 - **Value types:** Dollar amounts are `number`, percentages are `number` (e.g. `5.97` means +5.97%), nullable fields use `null` (not `0` or `""`), transaction hashes use `signature`.
 - **Table headers:** Match the JSON key semantics — e.g. a JSON field `signature` maps to table header "Tx Signature", `pnlUsd` maps to "PnL".
 - **Formatters:** Use `Output.formatDollar()`, `Output.formatDollarChange()`, `Output.formatPercentageChange()` for consistent styling. Pass `{ decimals: N }` to `formatDollar` when explicit precision is needed.

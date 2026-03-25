@@ -138,7 +138,7 @@ export class PredictionsCommand {
     }
 
     const events = data.map((e) => ({
-      id: e.eventId,
+      eventId: e.eventId,
       title: e.metadata.title,
       category: e.category,
       isLive: e.isLive,
@@ -150,7 +150,7 @@ export class PredictionsCommand {
         ? new Date(e.metadata.closeTime).toISOString()
         : null,
       markets: (e.markets ?? []).map((m) => ({
-        id: m.marketId,
+        marketId: m.marketId,
         title: m.metadata.title,
         status: m.status,
         yesPriceUsd: m.pricing.buyYesPriceUsd
@@ -191,13 +191,13 @@ export class PredictionsCommand {
             title: "Market",
             yes: "Yes",
             no: "No",
-            id: "ID",
+            marketId: "Market ID",
           },
           rows: event.markets.map((m) => ({
             title: m.title,
             yes: this.formatPricePct(m.yesPriceUsd),
             no: this.formatPricePct(m.noPriceUsd),
-            id: m.id,
+            marketId: m.marketId,
           })),
         });
       }

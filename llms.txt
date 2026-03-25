@@ -14,4 +14,4 @@ On failure, commands exit with non-zero code with an error message. In JSON mode
 - [Spot](docs/spot.md): Spot trading, transfers, reclaim rent, token and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending and yield farming
-- Predictions: Create and trade prediction markets (coming soon)
+- [Predictions](docs/predictions.md): Prediction markets

@@ -49,6 +49,13 @@ jup lend earn tokens
 jup lend earn deposit --token USDC --amount 100
 # View your lending positions
 jup lend earn positions
+
+# Browse prediction markets
+jup predictions events --category crypto
+# Open a prediction position
+jup predictions open --market <marketId> --side yes --amount 10
+# View your prediction positions
+jup predictions positions
 ```
 
 ## Docs
@@ -65,6 +72,7 @@ jup lend earn positions
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending and yield farming
+- [Predictions](docs/predictions.md): Prediction markets
 
 ## Changelog
 
