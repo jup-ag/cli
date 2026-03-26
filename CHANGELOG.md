@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.0
+
+### Features
+
+- Add `--dry-run` flag to all transacting commands (#11)
+- Add `--slippage` param to `spot swap` (#5)
+
 ## v0.5.0
 
 ### Features
