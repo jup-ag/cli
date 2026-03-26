@@ -77,6 +77,8 @@ export class Output {
     }
   }
 
+  public static readonly DRY_RUN_LABEL = chalk.bold(chalk.yellow("[DRY RUN]"));
+
   public static formatBoolean(value: boolean | undefined): string {
     return value ? "✅" : "❌";
   }

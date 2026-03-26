@@ -266,8 +266,9 @@ export class SpotCommand {
 
     if (Output.isJson()) {
       Output.json({
+        ...(Config.dryRun && { dryRun: true }),
         trader: signer.address,
-        signature: swap.result.signature,
+        signature: swap.result?.signature ?? null,
         inputToken: {
           id: inputToken.id,
           symbol: inputToken.symbol,
@@ -284,10 +285,16 @@ export class SpotCommand {
         outUsdValue: swap.order.outUsdValue,
         priceImpact: swap.order.priceImpact,
         networkFeeLamports: swap.networkFeeLamports,
+        ...(Config.dryRun && {
+          transaction: swap.order.transaction,
+        }),
       });
       return;
     }
 
+    if (Config.dryRun) {
+      console.log(Output.DRY_RUN_LABEL);
+    }
     Output.table({
       type: "vertical",
       rows: [
@@ -307,10 +314,9 @@ export class SpotCommand {
           label: "Network Fee",
           value: `${networkFee} SOL`,
         },
-        {
-          label: "Tx Signature",
-          value: swap.result.signature,
-        },
+        ...(!Config.dryRun
+          ? [{ label: "Tx Signature", value: swap.result!.signature }]
+          : []),
       ],
     });
   }
@@ -497,6 +503,56 @@ export class SpotCommand {
       throw new Error(txResponse.error);
     }
 
+    const humanAmount = NumberConverter.fromChainAmount(
+      chainAmount,
+      token.decimals,
+      multiplier
+    );
+    const value = Number(humanAmount) * (token.usdPrice ?? 0);
+    const networkFee = NumberConverter.fromChainAmount(
+      txResponse.feeAmount?.toString() ?? 0n,
+      Asset.SOL.decimals
+    );
+
+    if (Config.dryRun) {
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          sender: signer.address,
+          recipient: opts.to,
+          token: {
+            id: token.id,
+            symbol: token.symbol,
+            decimals: token.decimals,
+          },
+          amount: humanAmount,
+          value: value,
+          networkFeeLamports: txResponse.feeAmount,
+          signature: null,
+          transaction: txResponse.transaction,
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          { label: "Sender", value: signer.address },
+          { label: "Recipient", value: opts.to },
+          {
+            label: "Amount",
+            value: `${humanAmount} ${token.symbol} (${Output.formatDollar(value)})`,
+          },
+          {
+            label: "Network Fee",
+            value: `${networkFee} SOL`,
+          },
+        ],
+      });
+      return;
+    }
+
     const signedTx = await signer.signTransaction(
       txResponse.transaction as Base64EncodedBytes
     );
@@ -504,13 +560,6 @@ export class SpotCommand {
       requestId: txResponse.requestId,
       signedTransaction: signedTx,
     });
-
-    const humanAmount = NumberConverter.fromChainAmount(
-      chainAmount,
-      token.decimals,
-      multiplier
-    );
-    const value = Number(humanAmount) * (token.usdPrice ?? 0);
 
     if (Output.isJson()) {
       Output.json({
@@ -528,11 +577,6 @@ export class SpotCommand {
       });
       return;
     }
-
-    const networkFee = NumberConverter.fromChainAmount(
-      txResponse.feeAmount?.toString() ?? 0n,
-      Asset.SOL.decimals
-    );
 
     Output.table({
       type: "vertical",
@@ -754,6 +798,50 @@ export class SpotCommand {
       throw new Error("No reclaimable token accounts found.");
     }
 
+    const reclaimedSol = NumberConverter.fromChainAmount(
+      netLamportsReclaimed,
+      Asset.SOL.decimals
+    );
+    const networkFee = NumberConverter.fromChainAmount(
+      networkFeeLamports,
+      Asset.SOL.decimals
+    );
+    const accountCount = mints.length - skippedCount;
+
+    if (Config.dryRun) {
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          totalLamportsReclaimed: Number(netLamportsReclaimed),
+          totalValueReclaimed: totalValueReclaimed,
+          networkFeeLamports: Number(networkFeeLamports),
+          signatures: null,
+          transactions: allTransactions.map((tx) => tx.transaction),
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          {
+            label: "SOL Reclaimed",
+            value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+          },
+          {
+            label: "Accounts Reclaimed",
+            value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
+          },
+          {
+            label: "Network Fee",
+            value: `${networkFee} SOL`,
+          },
+        ],
+      });
+      return;
+    }
+
     // Sign and execute each transaction sequentially
     const signatures: string[] = [];
     for (const tx of allTransactions) {
@@ -779,16 +867,6 @@ export class SpotCommand {
       });
       return;
     }
-
-    const reclaimedSol = NumberConverter.fromChainAmount(
-      netLamportsReclaimed,
-      Asset.SOL.decimals
-    );
-    const networkFee = NumberConverter.fromChainAmount(
-      networkFeeLamports,
-      Asset.SOL.decimals
-    );
-    const accountCount = mints.length - skippedCount;
 
     Output.table({
       type: "vertical",

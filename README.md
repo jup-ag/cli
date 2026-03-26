@@ -62,6 +62,8 @@ jup predictions positions
 
 > [!NOTE]
 > This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses: `jup config set --output json`, or use `-f json` flag on individual commands.
+>
+> Use `--dry-run` on any transacting command to preview the result without signing or submitting on-chain. In JSON mode, the response includes the unsigned base64 `transaction` for external signing.
 
 [Read the docs](./docs/) for specific guides, examples, and workflows:
 

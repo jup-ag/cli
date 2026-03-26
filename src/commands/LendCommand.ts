@@ -236,11 +236,47 @@ export class LendCommand {
       rawAmount: opts.rawAmount,
     });
 
+    const apyPct = this.rateToPct(lendToken.totalRate);
+
+    if (Config.dryRun) {
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          token: {
+            id: lendToken.assetAddress,
+            symbol: lendToken.asset.symbol,
+            decimals: lendToken.asset.decimals,
+          },
+          depositedAmount: swap.inAmount,
+          depositedUsd: swap.order.inUsdValue,
+          apyPct,
+          signature: null,
+          transaction: swap.order.transaction,
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          {
+            label: "Deposited",
+            value: `${swap.inAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.inUsdValue)})`,
+          },
+          {
+            label: "APY",
+            value: Output.formatPercentageChange(apyPct),
+          },
+        ],
+      });
+      return;
+    }
+
     const { positionAmount, price } = await this.fetchCurrentPosition(
       signer.address,
       lendToken
     );
-    const apyPct = this.rateToPct(lendToken.totalRate);
 
     if (Output.isJson()) {
       Output.json({
@@ -254,7 +290,7 @@ export class LendCommand {
         positionAmount,
         positionUsd: positionAmount * price,
         apyPct,
-        signature: swap.result.signature,
+        signature: swap.result!.signature,
       });
       return;
     }
@@ -276,7 +312,7 @@ export class LendCommand {
         },
         {
           label: "Tx Signature",
-          value: swap.result.signature,
+          value: swap.result!.signature,
         },
       ],
     });
@@ -336,11 +372,47 @@ export class LendCommand {
       rawAmount,
     });
 
+    const apyPct = this.rateToPct(lendToken.totalRate);
+
+    if (Config.dryRun) {
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          token: {
+            id: lendToken.assetAddress,
+            symbol: lendToken.asset.symbol,
+            decimals: lendToken.asset.decimals,
+          },
+          withdrawnAmount: swap.outAmount,
+          withdrawnUsd: swap.order.outUsdValue,
+          apyPct,
+          signature: null,
+          transaction: swap.order.transaction,
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          {
+            label: "Withdrawn",
+            value: `${swap.outAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.outUsdValue)})`,
+          },
+          {
+            label: "APY",
+            value: Output.formatPercentageChange(apyPct),
+          },
+        ],
+      });
+      return;
+    }
+
     const { positionAmount, price } = await this.fetchCurrentPosition(
       signer.address,
       lendToken
     );
-    const apyPct = this.rateToPct(lendToken.totalRate);
 
     if (Output.isJson()) {
       Output.json({
@@ -354,7 +426,7 @@ export class LendCommand {
         positionAmount,
         positionUsd: positionAmount * price,
         apyPct,
-        signature: swap.result.signature,
+        signature: swap.result!.signature,
       });
       return;
     }
@@ -376,7 +448,7 @@ export class LendCommand {
         },
         {
           label: "Tx Signature",
-          value: swap.result.signature,
+          value: swap.result!.signature,
         },
       ],
     });

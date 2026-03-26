@@ -14,6 +14,8 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 export class Config {
+  public static dryRun: boolean = false;
+
   public static readonly CONFIG_DIR = join(homedir(), ".config", "jup");
   public static readonly SETTINGS_FILE = join(this.CONFIG_DIR, "settings.json");
   public static readonly KEYS_DIR = join(this.CONFIG_DIR, "keys");

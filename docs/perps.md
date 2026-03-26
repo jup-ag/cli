@@ -139,12 +139,16 @@ jup perps open --asset ETH --side long --amount 10 --input USDC --leverage 3 --t
 
 # Limit order (triggers when price reaches --limit)
 jup perps open --asset BTC --side long --amount 10 --input USDC --leverage 2 --limit 65000
+
+# Dry-run to preview without executing
+jup perps open --asset SOL --side long --amount 0.2 --leverage 2 --dry-run
 ```
 
 - `--side` accepts `long`, `short`, `buy` (= long), or `sell` (= short)
 - `--input` defaults to SOL; accepts SOL, BTC, ETH, or USDC
 - `--slippage` defaults to 200 (2%); set in basis points
 - `--tp` and `--sl` cannot be combined with `--limit`
+- `--dry-run` previews the order without signing. The API simulates the transaction, returning entry price, size, leverage, liquidation price, and fees. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response (market order):
@@ -188,9 +192,13 @@ jup perps set --position <pubkey> --tp 100 --sl 70
 
 # Update a limit order's trigger price
 jup perps set --order <pubkey> --limit 64000
+
+# Dry-run
+jup perps set --position <pubkey> --tp 100 --sl 70 --dry-run
 ```
 
 - Get the `positionPubkey` or `orderPubkey` from `jup perps positions`
+- `--dry-run` previews the update without signing. JSON response includes the unsigned base64 `transaction` for each update.
 
 ```js
 // Example JSON response (update limit order):
@@ -240,10 +248,14 @@ jup perps close --order <pubkey>
 
 # Cancel a TP/SL order
 jup perps close --tpsl <pubkey>
+
+# Dry-run
+jup perps close --position <pubkey> --dry-run
 ```
 
 - `--receive` defaults to the position's collateral token; must be USDC or the market token (e.g. BTC for a BTC position)
 - `--size` for partial close; omit to close entirely
+- `--dry-run` previews the close without signing, showing PnL, fees, and received amount. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response (close/decrease position):

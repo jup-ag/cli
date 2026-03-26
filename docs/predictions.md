@@ -89,12 +89,14 @@ jup predictions positions --position <pubkey>
 jup predictions open --market <marketId> --side yes --amount 10
 jup predictions open --market <marketId> --side no --amount 5 --input USDC
 jup predictions open --market <marketId> --side y --amount 10 --key mykey
+jup predictions open --market <marketId> --side yes --amount 10 --dry-run
 ```
 
 - `--market`: market ID from `jup predictions events`
 - `--side`: `yes`, `no`, `y`, `n`
 - `--amount`: input token amount (human-readable)
 - `--input`: input token symbol or mint (default: `USDC`)
+- `--dry-run` previews the order without signing, showing cost, fees, and payout. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response:
@@ -123,11 +125,15 @@ jup predictions close --position <pubkey>
 
 # Close all positions
 jup predictions close --position all
+
+# Dry-run
+jup predictions close --position <pubkey> --dry-run
 ```
 
 - The CLI auto-detects whether to sell or claim based on the market result
 - Claimable positions (market resolved in your favor) are claimed for the full payout
 - Open positions on live markets are sold at the current market price
+- `--dry-run` previews the close without signing. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response (close):

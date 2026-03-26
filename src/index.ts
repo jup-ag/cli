@@ -21,6 +21,7 @@ program
   .description("Jupiter CLI for agentic workflows")
   .version(version)
   .option("-f, --format <type>", "Output format ('table' or 'json')")
+  .option("--dry-run", "Preview the transaction without signing or submitting")
   .hook("preAction", (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.format) {
@@ -28,6 +29,9 @@ program
         throw new Error("Invalid --format value. Must be 'table' or 'json'.");
       }
       Output.outputOverride = opts.format;
+    }
+    if (opts.dryRun) {
+      Config.dryRun = true;
     }
   });
 

@@ -2,7 +2,7 @@ import type { Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
 
-import { PerpsClient, type ExecuteResponse } from "../clients/PerpsClient.ts";
+import { PerpsClient } from "../clients/PerpsClient.ts";
 import { Asset, resolveAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
@@ -87,7 +87,10 @@ export class PerpsCommand {
     signer: Signer,
     action: string,
     serializedTxBase64: string
-  ): Promise<ExecuteResponse> {
+  ): Promise<{ action: string; txid: string | null }> {
+    if (Config.dryRun) {
+      return { action, txid: null };
+    }
     const signedTx = await signer.signTransaction(
       serializedTxBase64 as Base64EncodedBytes
     );
@@ -354,6 +357,7 @@ export class PerpsCommand {
 
       if (Output.isJson()) {
         Output.json({
+          ...(Config.dryRun && { dryRun: true }),
           type: "limit-order",
           positionPubkey: res.positionPubkey,
           asset,
@@ -362,10 +366,16 @@ export class PerpsCommand {
           sizeUsd: NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta),
           leverage: Number(res.quote.leverage),
           signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
         });
         return;
       }
 
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+      }
       Output.table({
         type: "vertical",
         rows: [
@@ -383,7 +393,9 @@ export class PerpsCommand {
             ),
           },
           { label: "Leverage", value: `${res.quote.leverage}x` },
-          { label: "Tx Signature", value: result.txid },
+          ...(!Config.dryRun
+            ? [{ label: "Tx Signature", value: result.txid! }]
+            : []),
         ],
       });
     } else {
@@ -428,6 +440,7 @@ export class PerpsCommand {
 
       if (Output.isJson()) {
         Output.json({
+          ...(Config.dryRun && { dryRun: true }),
           type: "market-order",
           positionPubkey: res.positionPubkey,
           asset,
@@ -442,10 +455,16 @@ export class PerpsCommand {
           ),
           openFeeUsd: NumberConverter.fromMicroUsd(res.quote.openFeeUsd),
           signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
         });
         return;
       }
 
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+      }
       Output.table({
         type: "vertical",
         rows: [
@@ -477,7 +496,9 @@ export class PerpsCommand {
               NumberConverter.fromMicroUsd(res.quote.openFeeUsd)
             ),
           },
-          { label: "Tx Signature", value: result.txid },
+          ...(!Config.dryRun
+            ? [{ label: "Tx Signature", value: result.txid! }]
+            : []),
         ],
       });
     }
@@ -525,13 +546,20 @@ export class PerpsCommand {
 
       if (Output.isJson()) {
         Output.json({
+          ...(Config.dryRun && { dryRun: true }),
           action: "update-limit-order",
           triggerPriceUsd: Number(opts.limit),
           signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
         });
         return;
       }
 
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+      }
       Output.table({
         type: "vertical",
         rows: [
@@ -540,7 +568,9 @@ export class PerpsCommand {
             label: "New Trigger Price",
             value: Output.formatDollar(Number(opts.limit)),
           },
-          { label: "Tx Signature", value: result.txid },
+          ...(!Config.dryRun
+            ? [{ label: "Tx Signature", value: result.txid! }]
+            : []),
         ],
       });
       return;
@@ -560,7 +590,8 @@ export class PerpsCommand {
       type: string;
       action: string;
       triggerPriceUsd: number;
-      signature: string;
+      signature: string | null;
+      transaction?: string;
     }[] = [];
 
     for (const [type, price] of [
@@ -591,6 +622,9 @@ export class PerpsCommand {
           action: "updated",
           triggerPriceUsd: Number(price),
           signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
         });
       } else {
         // Create new
@@ -616,19 +650,35 @@ export class PerpsCommand {
           action: "created",
           triggerPriceUsd: Number(price),
           signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
         });
       }
     }
 
     if (Output.isJson()) {
-      Output.json({ action: "set-tpsl", updates: results });
+      Output.json({
+        ...(Config.dryRun && { dryRun: true }),
+        action: "set-tpsl",
+        updates: results,
+      });
       return;
     }
 
+    if (Config.dryRun) {
+      console.log(Output.DRY_RUN_LABEL);
+    }
     for (const r of results) {
-      console.log(
-        `${r.type.toUpperCase()} ${r.action} at $${r.triggerPriceUsd} (tx: ${r.signature})`
-      );
+      if (Config.dryRun) {
+        console.log(
+          `${r.type.toUpperCase()} ${r.action} at $${r.triggerPriceUsd}`
+        );
+      } else {
+        console.log(
+          `${r.type.toUpperCase()} ${r.action} at $${r.triggerPriceUsd} (tx: ${r.signature})`
+        );
+      }
     }
   }
 
@@ -664,11 +714,22 @@ export class PerpsCommand {
       );
 
       if (Output.isJson()) {
-        Output.json({ action: "cancel-limit-order", signature: result.txid });
+        Output.json({
+          ...(Config.dryRun && { dryRun: true }),
+          action: "cancel-limit-order",
+          signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
+        });
         return;
       }
 
-      console.log(`Limit order cancelled (tx: ${result.txid})`);
+      if (Config.dryRun) {
+        console.log(`${Output.DRY_RUN_LABEL} Limit order would be cancelled`);
+      } else {
+        console.log(`Limit order cancelled (tx: ${result.txid})`);
+      }
       return;
     }
 
@@ -682,11 +743,22 @@ export class PerpsCommand {
       );
 
       if (Output.isJson()) {
-        Output.json({ action: "cancel-tpsl", signature: result.txid });
+        Output.json({
+          ...(Config.dryRun && { dryRun: true }),
+          action: "cancel-tpsl",
+          signature: result.txid,
+          ...(Config.dryRun && {
+            transaction: res.serializedTxBase64,
+          }),
+        });
         return;
       }
 
-      console.log(`TP/SL cancelled (tx: ${result.txid})`);
+      if (Config.dryRun) {
+        console.log(`${Output.DRY_RUN_LABEL} TP/SL would be cancelled`);
+      } else {
+        console.log(`TP/SL cancelled (tx: ${result.txid})`);
+      }
       return;
     }
 
@@ -699,6 +771,23 @@ export class PerpsCommand {
         throw new Error("No open positions to close.");
       }
 
+      if (Config.dryRun) {
+        if (Output.isJson()) {
+          Output.json({
+            dryRun: true,
+            action: "close-all",
+            signatures: null,
+            transactions: res.serializedTxs.map((tx) => tx.serializedTxBase64),
+          });
+          return;
+        }
+
+        console.log(
+          `${Output.DRY_RUN_LABEL} Would close ${res.serializedTxs.length} position${res.serializedTxs.length !== 1 ? "s" : ""}`
+        );
+        return;
+      }
+
       const sigs: string[] = [];
       for (const tx of res.serializedTxs) {
         const result = await this.signAndExecute(
@@ -706,7 +795,7 @@ export class PerpsCommand {
           "decrease-position",
           tx.serializedTxBase64
         );
-        sigs.push(result.txid);
+        sigs.push(result.txid!);
       }
 
       if (Output.isJson()) {
@@ -760,6 +849,7 @@ export class PerpsCommand {
 
     if (Output.isJson()) {
       Output.json({
+        ...(Config.dryRun && { dryRun: true }),
         action: entirePosition ? "close-position" : "decrease-position",
         positionPubkey: res.positionPubkey,
         sizeReducedUsd: NumberConverter.fromMicroUsd(res.quote.sizeUsdDelta),
@@ -769,10 +859,16 @@ export class PerpsCommand {
         receivedUsd: NumberConverter.fromMicroUsd(res.quote.transferAmountUsd),
         feesUsd: NumberConverter.fromMicroUsd(res.quote.totalFeeUsd),
         signature: result.txid,
+        ...(Config.dryRun && {
+          transaction: res.serializedTxBase64,
+        }),
       });
       return;
     }
 
+    if (Config.dryRun) {
+      console.log(Output.DRY_RUN_LABEL);
+    }
     Output.table({
       type: "vertical",
       rows: [
@@ -800,7 +896,9 @@ export class PerpsCommand {
             NumberConverter.fromMicroUsd(res.quote.totalFeeUsd)
           ),
         },
-        { label: "Tx Signature", value: result.txid },
+        ...(!Config.dryRun
+          ? [{ label: "Tx Signature", value: result.txid! }]
+          : []),
       ],
     });
   }

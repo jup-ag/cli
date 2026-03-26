@@ -6,13 +6,14 @@ import {
   type GetOrderResponse,
   type PostExecuteResponse,
 } from "../clients/UltraClient.ts";
+import { Config } from "./Config.ts";
 import { NumberConverter } from "./NumberConverter.ts";
 import type { Signer } from "./Signer.ts";
 
 export type SwapResult = {
   signer: Signer;
   order: GetOrderResponse;
-  result: PostExecuteResponse;
+  result: PostExecuteResponse | null;
   inputToken: Token;
   outputToken: Token;
   inAmount: string;
@@ -66,6 +67,46 @@ export class Swap {
       throw new Error("No valid routes found.");
     }
 
+    let networkFeeLamports = 0;
+    if (
+      order.prioritizationFeePayer === signer.address &&
+      order.prioritizationFeeLamports
+    ) {
+      networkFeeLamports = order.prioritizationFeeLamports;
+    }
+    if (order.rentFeePayer === signer.address && order.rentFeeLamports) {
+      networkFeeLamports += order.rentFeeLamports;
+    }
+    if (
+      order.signatureFeePayer === signer.address &&
+      order.signatureFeeLamports
+    ) {
+      networkFeeLamports += order.signatureFeeLamports;
+    }
+
+    if (Config.dryRun) {
+      const inAmount = NumberConverter.fromChainAmount(
+        order.inAmount,
+        inputToken.decimals,
+        inputMultiplier
+      );
+      const outAmount = NumberConverter.fromChainAmount(
+        order.outAmount,
+        outputToken.decimals,
+        outputMultiplier
+      );
+      return {
+        signer,
+        order,
+        result: null,
+        inputToken,
+        outputToken,
+        inAmount,
+        outAmount,
+        networkFeeLamports,
+      };
+    }
+
     const signedTx = await signer.signTransaction(
       order.transaction as Base64EncodedBytes
     );
@@ -84,23 +125,6 @@ export class Swap {
       outputToken.decimals,
       outputMultiplier
     );
-
-    let networkFeeLamports = 0;
-    if (
-      order.prioritizationFeePayer === signer.address &&
-      order.prioritizationFeeLamports
-    ) {
-      networkFeeLamports = order.prioritizationFeeLamports;
-    }
-    if (order.rentFeePayer === signer.address && order.rentFeeLamports) {
-      networkFeeLamports += order.rentFeeLamports;
-    }
-    if (
-      order.signatureFeePayer === signer.address &&
-      order.signatureFeeLamports
-    ) {
-      networkFeeLamports += order.signatureFeeLamports;
-    }
 
     return {
       signer,

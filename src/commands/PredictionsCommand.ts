@@ -334,6 +334,7 @@ export class PredictionsCommand {
 
     if (Output.isJson()) {
       Output.json({
+        ...(Config.dryRun && { dryRun: true }),
         action: "open",
         marketId: opts.market,
         side,
@@ -344,10 +345,14 @@ export class PredictionsCommand {
         positionPayoutUsd,
         positionPubkey: order.positionPubkey,
         signature: result.signature,
+        ...(Config.dryRun && { transaction: res.transaction }),
       });
       return;
     }
 
+    if (Config.dryRun) {
+      console.log(Output.DRY_RUN_LABEL);
+    }
     Output.table({
       type: "vertical",
       rows: [
@@ -365,7 +370,9 @@ export class PredictionsCommand {
           value: Output.formatDollar(positionPayoutUsd),
         },
         { label: "Position", value: order.positionPubkey },
-        { label: "Tx Signature", value: result.signature },
+        ...(!Config.dryRun
+          ? [{ label: "Tx Signature", value: result.signature! }]
+          : []),
       ],
     });
   }
@@ -472,7 +479,10 @@ export class PredictionsCommand {
   private static async signAndExecute(
     signer: Signer,
     transaction: string
-  ): Promise<{ signature: string }> {
+  ): Promise<{ signature: string | null }> {
+    if (Config.dryRun) {
+      return { signature: null };
+    }
     const signedTx = await signer.signTransaction(
       transaction as Base64EncodedBytes
     );
@@ -495,7 +505,8 @@ export class PredictionsCommand {
       const results: {
         action: string;
         positionPubkey: string;
-        signature: string;
+        signature: string | null;
+        transaction?: string;
       }[] = [];
 
       for (const item of res.data) {
@@ -508,11 +519,32 @@ export class PredictionsCommand {
           action: isClaim ? "claim" : "close",
           positionPubkey: pubkey,
           signature: execResult.signature,
+          ...(Config.dryRun && { transaction: item.transaction }),
         });
       }
 
       if (Output.isJson()) {
-        Output.json({ action: "close-all", results });
+        Output.json({
+          ...(Config.dryRun && { dryRun: true }),
+          action: "close-all",
+          results,
+        });
+        return;
+      }
+
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+        Output.table({
+          type: "horizontal",
+          headers: {
+            action: "Action",
+            positionPubkey: "Position",
+          },
+          rows: results.map((r) => ({
+            action: r.action,
+            positionPubkey: r.positionPubkey,
+          })),
+        });
         return;
       }
 
@@ -546,6 +578,7 @@ export class PredictionsCommand {
 
       if (Output.isJson()) {
         Output.json({
+          ...(Config.dryRun && { dryRun: true }),
           action: "claim",
           event: position.eventMetadata.title,
           market: position.marketMetadata.title,
@@ -554,10 +587,14 @@ export class PredictionsCommand {
           contracts,
           payoutUsd,
           signature: result.signature,
+          ...(Config.dryRun && { transaction: res.transaction }),
         });
         return;
       }
 
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+      }
       Output.table({
         type: "vertical",
         rows: [
@@ -570,7 +607,9 @@ export class PredictionsCommand {
           },
           { label: "Payout", value: Output.formatDollar(payoutUsd) },
           { label: "Position", value: opts.position },
-          { label: "Tx Signature", value: result.signature },
+          ...(!Config.dryRun
+            ? [{ label: "Tx Signature", value: result.signature! }]
+            : []),
         ],
       });
     } else {
@@ -587,6 +626,7 @@ export class PredictionsCommand {
 
       if (Output.isJson()) {
         Output.json({
+          ...(Config.dryRun && { dryRun: true }),
           action: "close",
           event: position.eventMetadata.title,
           market: position.marketMetadata.title,
@@ -596,10 +636,14 @@ export class PredictionsCommand {
           costUsd,
           feeUsd,
           signature: result.signature,
+          ...(Config.dryRun && { transaction: res.transaction }),
         });
         return;
       }
 
+      if (Config.dryRun) {
+        console.log(Output.DRY_RUN_LABEL);
+      }
       Output.table({
         type: "vertical",
         rows: [
@@ -613,7 +657,9 @@ export class PredictionsCommand {
           { label: "Cost", value: Output.formatDollar(costUsd) },
           { label: "Fee", value: Output.formatDollar(feeUsd) },
           { label: "Position", value: opts.position },
-          { label: "Tx Signature", value: result.signature },
+          ...(!Config.dryRun
+            ? [{ label: "Tx Signature", value: result.signature! }]
+            : []),
         ],
       });
     }

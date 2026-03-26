@@ -55,10 +55,12 @@ jup spot quote --from <mint> --to <mint> --raw-amount 1000000000
 jup spot swap --from SOL --to USDC --amount 1
 jup spot swap --from SOL --to USDC --amount 1 --key mykey
 jup spot swap --from SOL --to USDC --amount 1 --slippage 50
+jup spot swap --from SOL --to USDC --amount 1 --dry-run
 ```
 
 - `--key` overrides the active key for this transaction
 - `--slippage` sets max slippage in basis points (e.g. `50` = 0.5%). Recommended to be emtpy: Jupiter's Real-Time Slippage Estimation (RTSE) automatically picks an optimal value.
+- `--dry-run` previews the swap without signing or submitting. The API still simulates the transaction, so errors like insufficient balance are caught. In JSON mode, the response includes the unsigned base64 `transaction` for external signing.
 
 ```js
 // Example JSON response:
@@ -113,9 +115,11 @@ jup spot portfolio --address <wallet-address>
 jup spot reclaim
 jup spot reclaim --key mykey
 jup spot reclaim --token USDC
+jup spot reclaim --dry-run
 ```
 
 - With no options, reclaims rent from all empty Associated Token Accounts (ATA) owned by the active key's wallet
+- `--dry-run` previews reclaimable amount without executing. JSON response includes the unsigned base64 `transactions` array.
 
 ```js
 // Example JSON response:
@@ -171,10 +175,12 @@ jup spot transfer --token SOL --to <recipient-address> --amount 1
 jup spot transfer --token USDC --to <recipient-address> --amount 50
 jup spot transfer --token <mint> --to <recipient-address> --raw-amount 1000000000
 jup spot transfer --token SOL --to <recipient-address> --amount 1 --key mykey
+jup spot transfer --token SOL --to <recipient-address> --amount 1 --dry-run
 ```
 
 - Works with both SOL and any SPL token
 - `--token` accepts a symbol or mint address
+- `--dry-run` previews the transfer without signing. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response:
@@ -191,11 +197,11 @@ jup spot transfer --token SOL --to <recipient-address> --amount 1 --key mykey
 
 ## Workflows
 
-### Check price then swap
+### Dry-run then swap
 
 ```bash
-jup spot quote --from SOL --to USDC --amount 1
-# Review the quoted output and price impact
+jup spot swap --from SOL --to USDC --amount 1 --dry-run
+# Review the output, fees, and simulation result
 jup spot swap --from SOL --to USDC --amount 1
 ```
 

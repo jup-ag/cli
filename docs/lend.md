@@ -66,6 +66,7 @@ jup lend earn positions --token USDC
 jup lend earn deposit --token USDC --amount 100
 jup lend earn deposit --token SOL --amount 1.5 --key mykey
 jup lend earn deposit --token USDC --raw-amount 100000000
+jup lend earn deposit --token USDC --amount 100 --dry-run
 ```
 
 - `--token` (required) — underlying token to deposit (symbol or mint address)
@@ -73,6 +74,7 @@ jup lend earn deposit --token USDC --raw-amount 100000000
 - `--raw-amount` uses on-chain units (e.g. `100000000` = 100 USDC)
 - Exactly one of `--amount` or `--raw-amount` is required
 - `--key` overrides the active key for this transaction
+- `--dry-run` previews the deposit without signing. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response:
@@ -94,6 +96,7 @@ jup lend earn withdraw --token USDC --amount 50
 jup lend earn withdraw --token USDC                   # withdraw entire position
 jup lend earn withdraw --token jlUSDC --amount 50     # also accepts jlToken directly
 jup lend earn withdraw --token USDC --raw-amount 50000000
+jup lend earn withdraw --token USDC --amount 50 --dry-run
 ```
 
 - `--token` (required) — token to withdraw (accepts underlying symbol/address or jlToken symbol/address)
@@ -101,6 +104,7 @@ jup lend earn withdraw --token USDC --raw-amount 50000000
 - `--raw-amount` in on-chain units of the jlToken
 - When neither `--amount` nor `--raw-amount` is provided, withdraws the entire position
 - `--key` overrides the active key for this transaction
+- `--dry-run` previews the withdrawal without signing. JSON response includes the unsigned base64 `transaction`.
 
 ```js
 // Example JSON response:
