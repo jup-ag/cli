@@ -4,7 +4,7 @@ import { Output } from "../lib/Output";
 import { Signer } from "../lib/Signer";
 
 const TAIFOON_API = "https://api.taifoon.dev";
-const TRACKER_ADDRESS = "0x0000000000000000000000000000000000000000"; // TODO: deploy and update
+const TRACKER_ADDRESS = "0x318638eb839695eBC9ed1b67EbD02132fB31F3a9"; // Taifoon devnet (36927)
 
 interface Signal {
   type: string;
