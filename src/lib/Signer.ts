@@ -3,22 +3,31 @@ import {
   getBase64Codec,
   getBase64EncodedWireTransaction,
   getTransactionCodec,
-  partiallySignTransaction,
+  partiallySignTransactionWithSigners,
   type Base64EncodedBytes,
   type Base64EncodedWireTransaction,
   type KeyPairSigner,
+  type TransactionPartialSigner,
 } from "@solana/kit";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Config } from "./Config.ts";
+import {
+  createKeychainSigner,
+  isKeychainKey,
+  loadKeychainConfig,
+} from "./KeychainConfig.ts";
 import { KeyPair } from "./KeyPair.ts";
 
 export class Signer {
-  #signer: KeyPairSigner;
-  #keyPair: KeyPair;
+  #signer: TransactionPartialSigner;
+  #keyPair: KeyPair | null;
 
-  private constructor(signer: KeyPairSigner, keyPair: KeyPair) {
+  private constructor(
+    signer: TransactionPartialSigner,
+    keyPair: KeyPair | null
+  ) {
     this.#signer = signer;
     this.#keyPair = keyPair;
   }
@@ -49,6 +58,12 @@ export class Signer {
   }
 
   public static async load(name: string): Promise<Signer> {
+    if (isKeychainKey(name)) {
+      const config = loadKeychainConfig(name);
+      const signer = await createKeychainSigner(config);
+      return new Signer(signer, null);
+    }
+
     const path = join(Config.KEYS_DIR, `${name}.json`);
     if (!existsSync(path)) {
       throw new Error(`Key "${name}" does not exist.`);
@@ -58,6 +73,9 @@ export class Signer {
   }
 
   public save(name: string): void {
+    if (!this.#keyPair) {
+      throw new Error("Cannot save a keychain-backed signer.");
+    }
     const keyPath = join(Config.KEYS_DIR, `${name}.json`);
     writeFileSync(keyPath, this.#keyPair.toJson());
   }
@@ -71,10 +89,8 @@ export class Signer {
   ): Promise<Base64EncodedWireTransaction> {
     const txBytes = getBase64Codec().encode(transaction);
     const decodedTx = getTransactionCodec().decode(txBytes);
-    // We use partiallySignTransaction instead of signTransaction since we do
-    // not want to assert that the transaction is fully signed
-    const signedTx = await partiallySignTransaction(
-      [this.#signer.keyPair],
+    const signedTx = await partiallySignTransactionWithSigners(
+      [this.#signer],
       decodedTx
     );
     return getBase64EncodedWireTransaction(signedTx);
