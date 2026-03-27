@@ -72,6 +72,13 @@ export class Signer {
     return this.fromKeyPair(await KeyPair.fromPrivateKey(file));
   }
 
+  public static async loadAddress(name: string): Promise<string> {
+    if (isKeychainKey(name)) {
+      return loadKeychainConfig(name).address;
+    }
+    return (await this.load(name)).address;
+  }
+
   public save(name: string): void {
     if (!this.#keyPair) {
       throw new Error("Cannot save a keychain-backed signer.");

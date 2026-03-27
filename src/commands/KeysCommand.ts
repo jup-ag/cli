@@ -26,6 +26,25 @@ import { Signer } from "../lib/Signer.ts";
 
 const VALID_BACKENDS = Object.keys(BACKEND_REGISTRY).join(", ");
 
+function keyExistsAsKeypair(name: string): boolean {
+  return existsSync(join(Config.KEYS_DIR, `${name}.json`));
+}
+
+function keyExists(name: string): boolean {
+  return keyExistsAsKeypair(name) || isKeychainKey(name);
+}
+
+function removeStaleCounterpart(name: string): void {
+  const keypairPath = join(Config.KEYS_DIR, `${name}.json`);
+  const kcPath = keychainConfigPath(name);
+  if (existsSync(keypairPath)) {
+    rmSync(keypairPath);
+  }
+  if (existsSync(kcPath)) {
+    rmSync(kcPath);
+  }
+}
+
 export class KeysCommand {
   public static register(program: Command): void {
     const keys = program.command("keys").description("Private key management");
@@ -168,9 +187,7 @@ export class KeysCommand {
       );
     }
 
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-    const keychainPath = keychainConfigPath(name);
-    if ((existsSync(keyPath) || existsSync(keychainPath)) && !opts.overwrite) {
+    if (keyExists(name) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
@@ -199,6 +216,9 @@ export class KeysCommand {
     } else {
       signer = await Signer.generate();
     }
+    if (opts.overwrite) {
+      removeStaleCounterpart(name);
+    }
     signer.save(name);
 
     this.list();
@@ -219,9 +239,7 @@ export class KeysCommand {
       );
     }
 
-    const configPath = keychainConfigPath(name);
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-    if ((existsSync(configPath) || existsSync(keyPath)) && !opts.overwrite) {
+    if (keyExists(name) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
@@ -229,6 +247,10 @@ export class KeysCommand {
 
     const params = parseParams(opts.param ?? []);
     const def = BACKEND_REGISTRY[backend];
+    const knownParams = new Set([
+      ...def.requiredParams,
+      ...def.optionalParams,
+    ]);
 
     for (const required of def.requiredParams) {
       if (!params[required]) {
@@ -242,6 +264,16 @@ export class KeysCommand {
       }
     }
 
+    const unknownParams = Object.keys(params).filter(
+      (k) => !knownParams.has(k)
+    );
+    if (unknownParams.length > 0) {
+      throw new Error(
+        `Unknown parameter(s) for ${backend}: ${unknownParams.join(", ")}. ` +
+          `Valid: ${[...knownParams].join(", ")}`
+      );
+    }
+
     const config: KeychainConfig = {
       backend,
       address: "",
@@ -251,6 +283,9 @@ export class KeysCommand {
     const signer = await createKeychainSigner(config);
     config.address = signer.address;
 
+    if (opts.overwrite) {
+      removeStaleCounterpart(name);
+    }
     saveKeychainConfig(name, config);
     this.list();
   }
@@ -311,12 +346,12 @@ export class KeysCommand {
     }
 
     if (opts.name) {
+      if (keyExists(opts.name)) {
+        throw new Error(`Key "${opts.name}" already exists.`);
+      }
       const newPath = isKeychain
         ? keychainConfigPath(opts.name)
         : join(Config.KEYS_DIR, `${opts.name}.json`);
-      if (existsSync(newPath)) {
-        throw new Error(`Key "${opts.name}" already exists.`);
-      }
       renameSync(keyPath, newPath);
       const settings = Config.load();
       if (settings.activeKey === name) {
@@ -328,9 +363,7 @@ export class KeysCommand {
   }
 
   private static use(name: string): void {
-    const hasKey =
-      existsSync(join(Config.KEYS_DIR, `${name}.json`)) || isKeychainKey(name);
-    if (!hasKey) {
+    if (!keyExists(name)) {
       throw new Error(`Key "${name}" not found.`);
     }
     Config.set({ activeKey: name });
@@ -351,13 +384,16 @@ export class KeysCommand {
       throw new Error(`Solana keypair not found at: ${sourcePath}`);
     }
 
-    const destPath = join(Config.KEYS_DIR, `${name}.json`);
-    if (existsSync(destPath) && !opts.overwrite) {
+    if (keyExists(name) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
     }
 
+    if (opts.overwrite) {
+      removeStaleCounterpart(name);
+    }
+    const destPath = join(Config.KEYS_DIR, `${name}.json`);
     copyFileSync(sourcePath, destPath);
     this.list();
   }
