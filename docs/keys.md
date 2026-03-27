@@ -1,6 +1,6 @@
 # Keys
 
-A key is required for signing transactions (swaps, transfers). Keys can be local keypairs stored at `~/.config/jup/keys/` or remote signers backed by [solana-keychain](https://github.com/solana-foundation/solana-keychain) (Privy, Vault, AWS KMS, Turnkey, Fireblocks, GCP KMS, Para, Crossmint).
+A key is required for signing transactions (swaps, transfers). Keys can be local keypairs stored at `~/.config/jup/keys/` or remote signers backed by [solana-keychain](https://github.com/solana-foundation/solana-keychain) (AWS KMS, CDP, Crossmint, Dfns, Fireblocks, GCP KMS, Para, Privy, Turnkey, Vault).
 
 ## Commands
 
@@ -50,6 +50,12 @@ jup keys add my-kms --backend aws-kms --param keyId=arn:aws:kms:... --param publ
 
 # Turnkey (requires TURNKEY_API_PRIVATE_KEY env var)
 jup keys add my-turnkey --backend turnkey --param apiPublicKey=<hex> --param organizationId=<id> --param privateKeyId=<id> --param publicKey=<base58-pubkey>
+
+# Coinbase CDP (requires CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET env vars)
+jup keys add my-cdp --backend cdp --param address=<solana-address>
+
+# Dfns (requires DFNS_AUTH_TOKEN and DFNS_PRIVATE_KEY_PEM env vars)
+jup keys add my-dfns --backend dfns --param credId=<cred-id> --param walletId=<wallet-id>
 
 # Fireblocks (requires FIREBLOCKS_API_KEY and FIREBLOCKS_PRIVATE_KEY_PEM env vars)
 jup keys add my-fireblocks --backend fireblocks --param vaultAccountId=<id>

@@ -6,7 +6,9 @@ import { Config } from "./Config.ts";
 
 export type KeychainBackend =
   | "aws-kms"
+  | "cdp"
   | "crossmint"
+  | "dfns"
   | "fireblocks"
   | "gcp-kms"
   | "para"
@@ -57,6 +59,21 @@ export const BACKEND_REGISTRY: Record<KeychainBackend, BackendDef> = {
       });
     },
   },
+  cdp: {
+    requiredEnvVars: ["CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "CDP_WALLET_SECRET"],
+    requiredParams: ["address"],
+    optionalParams: ["baseUrl"],
+    create: async (params) => {
+      const { createCdpSigner } = await import("@solana/keychain-cdp");
+      return createCdpSigner({
+        cdpApiKeyId: requireEnv("CDP_API_KEY_ID"),
+        cdpApiKeySecret: requireEnv("CDP_API_KEY_SECRET"),
+        cdpWalletSecret: requireEnv("CDP_WALLET_SECRET"),
+        address: requireParam(params, "address"),
+        baseUrl: params.baseUrl,
+      });
+    },
+  },
   crossmint: {
     requiredEnvVars: ["CROSSMINT_API_KEY"],
     requiredParams: ["walletLocator"],
@@ -68,6 +85,21 @@ export const BACKEND_REGISTRY: Record<KeychainBackend, BackendDef> = {
         apiKey: requireEnv("CROSSMINT_API_KEY"),
         walletLocator: requireParam(params, "walletLocator"),
         signer: params.signer,
+      });
+    },
+  },
+  dfns: {
+    requiredEnvVars: ["DFNS_AUTH_TOKEN", "DFNS_PRIVATE_KEY_PEM"],
+    requiredParams: ["credId", "walletId"],
+    optionalParams: ["apiBaseUrl"],
+    create: async (params) => {
+      const { createDfnsSigner } = await import("@solana/keychain-dfns");
+      return createDfnsSigner({
+        authToken: requireEnv("DFNS_AUTH_TOKEN"),
+        credId: requireParam(params, "credId"),
+        privateKeyPem: requireEnv("DFNS_PRIVATE_KEY_PEM"),
+        walletId: requireParam(params, "walletId"),
+        apiBaseUrl: params.apiBaseUrl,
       });
     },
   },
