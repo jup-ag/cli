@@ -1,5 +1,5 @@
 import type { Base64EncodedBytes } from "@solana/kit";
-import { readFileSync } from "node:fs";
+
 import type { Command } from "commander";
 
 import {
@@ -27,7 +27,30 @@ export class VrfdCommand {
       .requiredOption("--twitter <handle>", "Project Twitter/X handle or URL")
       .requiredOption("--description <text>", "Reason for verification request")
       .option("--sender-twitter <handle>", "Submitter's Twitter/X handle")
-      .option("--metadata <path>", "Path to JSON file with token metadata")
+      .option("--meta-icon <url>", "Token icon URL")
+      .option("--meta-name <name>", "Token name")
+      .option("--meta-symbol <symbol>", "Token symbol/ticker")
+      .option("--meta-website <url>", "Token website URL")
+      .option("--meta-telegram <url>", "Telegram group URL")
+      .option("--meta-twitter <url>", "Token Twitter/X URL")
+      .option("--meta-twitter-community <url>", "Twitter community URL")
+      .option("--meta-discord <url>", "Discord server URL")
+      .option("--meta-instagram <url>", "Instagram URL")
+      .option("--meta-tiktok <url>", "TikTok URL")
+      .option("--meta-circulating-supply <amount>", "Circulating supply value")
+      .option("--meta-description <text>", "Token description")
+      .option("--meta-coingecko-coin-id <id>", "CoinGecko coin identifier")
+      .option(
+        "--meta-circulating-supply-url <url>",
+        "Circulating supply API URL"
+      )
+      .option("--meta-other-url <url>", "Additional URL")
+      .option("--meta-use-circulating-supply", "Enable circulating supply")
+      .option("--meta-use-coingecko-coin-id", "Enable CoinGecko coin ID")
+      .option(
+        "--meta-use-circulating-supply-url",
+        "Enable circulating supply URL"
+      )
       .option("--key <name>", "Key to use for signing")
       .action((opts) => this.submit(opts));
   }
@@ -80,8 +103,25 @@ export class VrfdCommand {
     twitter: string;
     description: string;
     senderTwitter?: string;
-    metadata?: string;
     key?: string;
+    metaIcon?: string;
+    metaName?: string;
+    metaSymbol?: string;
+    metaWebsite?: string;
+    metaTelegram?: string;
+    metaTwitter?: string;
+    metaTwitterCommunity?: string;
+    metaDiscord?: string;
+    metaInstagram?: string;
+    metaTiktok?: string;
+    metaCirculatingSupply?: string;
+    metaDescription?: string;
+    metaCoingeckoCoinId?: string;
+    metaCirculatingSupplyUrl?: string;
+    metaOtherUrl?: string;
+    metaUseCirculatingSupply?: boolean;
+    metaUseCoingeckoCoinId?: boolean;
+    metaUseCirculatingSupplyUrl?: boolean;
   }): Promise<void> {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
@@ -101,18 +141,15 @@ export class VrfdCommand {
       );
     }
 
-    // Load metadata from file if provided
-    let tokenMetadata: TokenMetadata | undefined;
-    if (opts.metadata) {
+    // Build metadata from inline --meta-* options if any were provided
+    const tokenMetadata = this.buildTokenMetadata(opts.token, opts);
+    if (tokenMetadata) {
       if (!eligibility.canMetadata) {
         throw new Error(
           "Token metadata update not available. " +
             (eligibility.metadataError ?? "")
         );
       }
-      const raw = readFileSync(opts.metadata, "utf-8");
-      tokenMetadata = JSON.parse(raw) as TokenMetadata;
-      tokenMetadata.tokenId = opts.token;
     }
 
     // Craft the payment transaction
@@ -241,5 +278,48 @@ export class VrfdCommand {
         },
       ],
     });
+  }
+
+  private static buildTokenMetadata(
+    tokenId: string,
+    opts: Record<string, unknown>
+  ): TokenMetadata | undefined {
+    const fieldMap: Record<string, keyof TokenMetadata> = {
+      metaIcon: "icon",
+      metaName: "name",
+      metaSymbol: "symbol",
+      metaWebsite: "website",
+      metaTelegram: "telegram",
+      metaTwitter: "twitter",
+      metaTwitterCommunity: "twitterCommunity",
+      metaDiscord: "discord",
+      metaInstagram: "instagram",
+      metaTiktok: "tiktok",
+      metaCirculatingSupply: "circulatingSupply",
+      metaDescription: "tokenDescription",
+      metaCoingeckoCoinId: "coingeckoCoinId",
+      metaCirculatingSupplyUrl: "circulatingSupplyUrl",
+      metaOtherUrl: "otherUrl",
+      metaUseCirculatingSupply: "useCirculatingSupply",
+      metaUseCoingeckoCoinId: "useCoingeckoCoinId",
+      metaUseCirculatingSupplyUrl: "useCirculatingSupplyUrl",
+    };
+
+    const metadata: Partial<TokenMetadata> = {};
+    let hasAny = false;
+
+    for (const [optKey, metaField] of Object.entries(fieldMap)) {
+      if (opts[optKey] !== undefined) {
+        (metadata as Record<string, unknown>)[metaField] = opts[optKey];
+        hasAny = true;
+      }
+    }
+
+    if (!hasAny) {
+      return undefined;
+    }
+
+    metadata.tokenId = tokenId;
+    return metadata as TokenMetadata;
   }
 }

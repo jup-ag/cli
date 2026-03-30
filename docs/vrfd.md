@@ -30,7 +30,8 @@ jup vrfd check --token <mint-address>
 jup vrfd submit --token <mint> --twitter @projecthandle --description "DeFi protocol on Solana"
 jup vrfd submit --token <mint> --twitter @projecthandle --description "DEX aggregator" --key mykey
 jup vrfd submit --token <mint> --twitter @projecthandle --description "Lending protocol" --sender-twitter @myhandle
-jup vrfd submit --token <mint> --twitter @projecthandle --description "NFT marketplace" --metadata metadata.json
+jup vrfd submit --token <mint> --twitter @projecthandle --description "NFT marketplace" \
+  --meta-name "Token Name" --meta-symbol "TKN" --meta-website "https://example.com"
 jup vrfd submit --token <mint> --twitter @projecthandle --description "Payment token" --dry-run
 ```
 
@@ -38,7 +39,7 @@ jup vrfd submit --token <mint> --twitter @projecthandle --description "Payment t
 - `--twitter` (required): project's Twitter/X handle or URL
 - `--description` (required): reason for verification request
 - `--sender-twitter`: submitter's Twitter/X handle (optional)
-- `--metadata`: path to a JSON file with token metadata to update alongside verification (optional)
+- `--meta-*`: inline token metadata fields (optional, see [metadata options](#metadata-options) below)
 - `--key`: key to use for signing (overrides active key)
 - `--dry-run` previews the payment transaction without signing. JSON response includes the unsigned base64 `transaction`.
 
@@ -54,24 +55,33 @@ jup vrfd submit --token <mint> --twitter @projecthandle --description "Payment t
 }
 ```
 
-### Metadata JSON file format
+### Metadata options
 
-When using `--metadata`, provide a JSON file with any of these optional fields:
+Pass token metadata inline with `--meta-` prefixed options. All are optional.
 
-```json
-{
-  "tokenId": "<mint-address>",
-  "name": "Token Name",
-  "symbol": "TKN",
-  "icon": "https://example.com/icon.png",
-  "tokenDescription": "A brief description of the token",
-  "website": "https://example.com",
-  "twitter": "https://x.com/project",
-  "telegram": "https://t.me/project",
-  "discord": "https://discord.gg/project",
-  "coingeckoCoinId": "token-name"
-}
-```
+**String fields:**
+
+- `--meta-name <name>`: Token name
+- `--meta-symbol <symbol>`: Token symbol/ticker
+- `--meta-icon <url>`: Token icon URL
+- `--meta-description <text>`: Token description
+- `--meta-website <url>`: Token website URL
+- `--meta-twitter <url>`: Token Twitter/X URL (distinct from `--twitter`, which is the project handle for the verification request)
+- `--meta-twitter-community <url>`: Twitter community URL
+- `--meta-telegram <url>`: Telegram group URL
+- `--meta-discord <url>`: Discord server URL
+- `--meta-instagram <url>`: Instagram URL
+- `--meta-tiktok <url>`: TikTok URL
+- `--meta-circulating-supply <amount>`: Circulating supply value
+- `--meta-coingecko-coin-id <id>`: CoinGecko coin identifier
+- `--meta-circulating-supply-url <url>`: Circulating supply API URL
+- `--meta-other-url <url>`: Additional URL
+
+**Boolean flags** (no value needed):
+
+- `--meta-use-circulating-supply`: Enable circulating supply
+- `--meta-use-coingecko-coin-id`: Enable CoinGecko coin ID
+- `--meta-use-circulating-supply-url`: Enable circulating supply URL
 
 ## Workflows
 
@@ -86,8 +96,9 @@ jup vrfd submit --token <mint> --twitter @project --description "My token"
 ### Submit with metadata update
 
 ```bash
-# Create a metadata.json file with token info
-jup vrfd submit --token <mint> --twitter @project --description "My token" --metadata metadata.json
+jup vrfd submit --token <mint> --twitter @project --description "My token" \
+  --meta-name "Token Name" --meta-symbol "TKN" \
+  --meta-website "https://example.com" --meta-twitter "https://x.com/token"
 ```
 
 ### Preview before submitting
