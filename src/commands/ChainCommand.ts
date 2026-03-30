@@ -313,34 +313,47 @@ export class ChainCommand {
         }
 
         if (options.dryRun) {
-          console.log(`\n[DRY RUN] Would submit registration to Taifoon warmbed`);
+          console.log(`\n[DRY RUN] Would submit chain ${chainId} to Taifoon for approval`);
           return;
         }
 
         try {
-          const res = await fetch(`${SEARCH_API}/rpc/submit`, {
+          const res = await fetch(`${SEARCH_API}/chain/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               chain_id: chainId,
-              url: rpc,
+              endpoint: rpc,
               chain_type: chainType,
-              contributor: "taifoon-cli",
+              name: chainName,
+              submitter: "taifoon-cli",
+              finality_type: finality.name,
             }),
           });
 
-          if (!res.ok) {
-            const text = await res.text();
-            console.error(`❌ Registration failed: ${res.status} ${text}`);
+          const data = await res.json() as any;
+
+          if (!data.ok) {
+            console.error(`❌ Submission failed: ${data.error}`);
             process.exit(1);
           }
 
-          console.log(`\n✅ Chain ${chainId} registered successfully!`);
-          console.log(`\nNext steps:`);
-          console.log(`  1. Configure block submission: jup chain configure --chain-id ${chainId} --interval 12s`);
-          console.log(`  2. Verify cross-chain:         jup chain verify --from ${chainId} --to 1`);
+          if (data.already_registered) {
+            console.log(`\n✅ ${data.message}`);
+          } else if (data.already_pending) {
+            console.log(`\n⏳ ${data.message}`);
+            console.log(`   Track status: jup chain submission --id ${data.id}`);
+          } else {
+            console.log(`\n⏳ Chain ${chainId} (${data.chain_name}) submitted for approval!`);
+            console.log(`   Submission ID: ${data.id}`);
+            console.log(`   Status: PENDING — the Taifoon team has been notified.`);
+            console.log(`\n   Track status: jup chain submission --id ${data.id}`);
+            console.log(`\nOnce approved:`);
+            console.log(`  1. Configure: jup chain configure --chain-id ${chainId} --interval 12s`);
+            console.log(`  2. Verify:    jup chain verify --from ${chainId} --to 1`);
+          }
         } catch (e: any) {
-          console.error(`❌ Registration failed: ${e.message}`);
+          console.error(`❌ Submission failed: ${e.message}`);
           process.exit(1);
         }
       });
@@ -617,6 +630,71 @@ export class ChainCommand {
         });
 
         console.log(`\nTotal: ${rows.length} chains`);
+      });
+
+    // ─── submission (track) ─────────────────────────────────────
+    chain
+      .command("submission")
+      .description("Track a chain submission status")
+      .option("--id <id>", "Submission ID")
+      .option("--chain-id <chainId>", "Filter by chain ID")
+      .option("--pending", "Show only pending submissions")
+      .action(async (options) => {
+        if (options.id) {
+          // Single submission lookup
+          try {
+            const res = await fetch(`${SEARCH_API}/chain/submission/${options.id}`, {
+              signal: AbortSignal.timeout(10000),
+            });
+            const data = await res.json() as any;
+            if (!data.ok) {
+              console.error(`❌ ${data.error}`);
+              process.exit(1);
+            }
+            const s = data.submission;
+            console.log(`🌀 Chain Submission — ${s.id}\n`);
+            console.log(`  Chain:     ${s.chain_name} (${s.chain_id})`);
+            console.log(`  Type:      ${s.chain_type}`);
+            console.log(`  Status:    ${s.status === 'pending' ? '⏳ PENDING' : s.status === 'approved' ? '✅ APPROVED' : '❌ REJECTED'}`);
+            console.log(`  Submitted: ${s.submitted_at}`);
+            if (s.approved_at) console.log(`  Approved:  ${s.approved_at}`);
+            if (s.rejected_at) console.log(`  Rejected:  ${s.rejected_at}`);
+            if (s.reject_reason) console.log(`  Reason:    ${s.reject_reason}`);
+            if (s.finality_type) console.log(`  Finality:  ${s.finality_type}`);
+          } catch (e: any) {
+            console.error(`❌ ${e.message}`);
+            process.exit(1);
+          }
+        } else {
+          // List submissions
+          const params = new URLSearchParams();
+          if (options.pending) params.set("status", "pending");
+          if (options.chainId) params.set("chain_id", options.chainId);
+          try {
+            const res = await fetch(`${SEARCH_API}/chain/submissions?${params}`, {
+              signal: AbortSignal.timeout(10000),
+            });
+            const data = await res.json() as any;
+            if (!data.ok || !data.submissions?.length) {
+              console.log("No submissions found.");
+              return;
+            }
+            Output.render(data.submissions, {
+              table: {
+                columns: [
+                  { key: "chain_id", header: "Chain" },
+                  { key: "chain_name", header: "Name" },
+                  { key: "status", header: "Status" },
+                  { key: "finality_type", header: "Finality" },
+                  { key: "submitted_at", header: "Submitted" },
+                ],
+              },
+            });
+          } catch (e: any) {
+            console.error(`❌ ${e.message}`);
+            process.exit(1);
+          }
+        }
       });
 
     // ─── status ───────────────────────────────────────────────
