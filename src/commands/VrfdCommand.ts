@@ -137,7 +137,7 @@ export class VrfdCommand {
     if (!eligibility.canVerify) {
       throw new Error(
         eligibility.verificationError ??
-          "Token is not eligible for express verification."
+          "Token is not eligible for verification."
       );
     }
 

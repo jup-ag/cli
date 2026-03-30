@@ -1,6 +1,6 @@
 # Token Verification
 
-Submit express token verification requests on Jupiter. Costs 1 JUP per verification.
+Submit token verification requests on Jupiter. Costs 1 JUP per verification.
 
 Requires: an active key for the `submit` command. See [setup](setup.md).
 
@@ -24,7 +24,7 @@ jup vrfd check --token <mint-address>
 }
 ```
 
-### Submit express verification
+### Submit verification
 
 ```bash
 jup vrfd submit --token <mint> --twitter @projecthandle --description "DeFi protocol on Solana"
