@@ -17,6 +17,59 @@ const TESTNET_KEYWORDS = [
   "devnet", "fuji", "alfajores", "mumbai", "amoy", "chiado",
 ];
 
+// Finality type mapping — mirrors DA-API v5_proof_assembler.rs map_finality_type()
+// Linked to TaifoonLightClientRegistry ConsensusType enum on devnet
+const FINALITY_MAP: Record<number, { type: number; name: string; verifier: string; confirmations?: number; note: string }> = {
+  // 0 = ETH_POS_CHECKPOINT
+  1:    { type: 0, name: "ETH_POS_CHECKPOINT", verifier: "EthPoS (Casper FFG)", note: "2 epoch finality (~12.8 min)" },
+  100:  { type: 0, name: "ETH_POS_CHECKPOINT", verifier: "Gnosis Beacon Chain", note: "ETH2-style PoS" },
+  // 1 = L2_OUTPUT_ROOT (OP Stack / zkSync / Scroll / rollups)
+  10:    { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Anchored to Ethereum L1 finality" },
+  8453:  { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Anchored to Ethereum L1 finality" },
+  324:   { type: 1, name: "L2_OUTPUT_ROOT", verifier: "ZkSyncDiamond", note: "ZK rollup, batch verified on L1" },
+  59144: { type: 1, name: "L2_OUTPUT_ROOT", verifier: "LineaRollup", note: "ZK rollup, batch verified on L1" },
+  534352:{ type: 1, name: "L2_OUTPUT_ROOT", verifier: "ScrollChain", note: "ZK rollup, batch verified on L1" },
+  81457: { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Blast L2 output oracle" },
+  7777777:{ type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Zora L2" },
+  34443: { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Mode L2" },
+  1135:  { type: 1, name: "L2_OUTPUT_ROOT", verifier: "DisputeGameFactory", note: "Lisk OP Stack" },
+  130:   { type: 1, name: "L2_OUTPUT_ROOT", verifier: "DisputeGameFactory", note: "Unichain OP Stack" },
+  252:   { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Fraxtal OP Stack" },
+  2741:  { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Abstract ZK rollup" },
+  957:   { type: 1, name: "L2_OUTPUT_ROOT", verifier: "L2OutputOracle", note: "Lyra OP Stack" },
+  // 2 = BSC_FAST_FINALITY
+  56:   { type: 2, name: "BSC_FAST_FINALITY", verifier: "BSC Fast Finality", note: "Parlia consensus, ~2 block finality" },
+  // 3 = DEPTH_BASED
+  21000000:{ type: 3, name: "DEPTH_BASED", verifier: "BitcoinPoWVerifierV2 (0x52f9...BA94)", confirmations: 6, note: "Nakamoto PoW, 6 confirms (~60 min)" },
+  137:  { type: 3, name: "DEPTH_BASED", verifier: "Polygon PoS", confirmations: 128, note: "Tendermint BFT + L1 checkpoints" },
+  195:  { type: 3, name: "DEPTH_BASED", verifier: "XLayer", confirmations: 64, note: "ZK batch confirmed" },
+  // 4 = INSTANT (single-slot BFT)
+  143:  { type: 4, name: "INSTANT", verifier: "MonadBFTVerifier (0x6547...1718)", note: "MonadBFT (HotStuff), single-slot finality" },
+  1329: { type: 4, name: "INSTANT", verifier: "CometBFTVerifier", note: "Sei CometBFT, instant finality" },
+  43114:{ type: 4, name: "INSTANT", verifier: "AVAX Snowman", note: "Snowman consensus, instant finality" },
+  250:  { type: 4, name: "INSTANT", verifier: "Fantom Lachesis", note: "DAG-based BFT, instant finality" },
+  // 5 = HOTSHOT
+  747:  { type: 5, name: "HOTSHOT", verifier: "HotShotVerifier", note: "Flow EVM, HotStuff BFT" },
+  999:  { type: 5, name: "HOTSHOT", verifier: "HotShotVerifier", note: "HyperEVM, Espresso-sequenced" },
+  1380012617:{ type: 5, name: "HOTSHOT", verifier: "ArbitrumOrbit", note: "RARI Chain, Arbitrum Orbit" },
+  33139:{ type: 5, name: "HOTSHOT", verifier: "ArbitrumOrbit", note: "ApeChain, Arbitrum Orbit" },
+  // 7 = GRANDPA
+  400:  { type: 7, name: "GRANDPA", verifier: "GrandpaVerifier (0xb73D...7a1)", note: "Polkadot relay chain GRANDPA finality" },
+  401:  { type: 7, name: "GRANDPA", verifier: "GrandpaVerifier", note: "Kusama relay chain GRANDPA finality" },
+  592:  { type: 7, name: "GRANDPA_RELAY", verifier: "GrandpaVerifier (relay proof)", note: "Astar parachain via Polkadot relay" },
+  1284: { type: 7, name: "GRANDPA_RELAY", verifier: "GrandpaVerifier (relay proof)", note: "Moonbeam parachain via Polkadot relay" },
+  3338: { type: 7, name: "GRANDPA_RELAY", verifier: "GrandpaVerifier (relay proof)", note: "Peaq parachain via Polkadot relay" },
+  // 11 = ARB_BOLD
+  42161:{ type: 11, name: "ARB_BOLD", verifier: "ArbitrumRollupCore (0x5eF0...d35)", note: "BoLD dispute protocol, ~7 day challenge period" },
+  // 12 = DPOS
+  500:  { type: 12, name: "TRON_DPOS", verifier: "TronDPoSVerifier (0x7A2B...0045)", note: "27 Super Representatives, DPoS" },
+  // 14 = SOL_TOWER_BFT
+  200:  { type: 14, name: "SOL_TOWER_BFT", verifier: "SolanaPoHVerifier (0x19eD...9403)", note: "Tower BFT + PoH, slot-level 2/3 voting" },
+};
+
+// Default finality for unknown EVM chains
+const DEFAULT_FINALITY = { type: 3, name: "DEPTH_BASED", verifier: "Generic (requires new verifier deployment)", confirmations: 64, note: "Unknown consensus — using depth-based finality (64 confirms). Contact Taifoon to deploy a specialized verifier." };
+
 // Non-EVM chain ID mapping
 const NON_EVM_CHAINS: Record<string, { chainId: number; chainType: string }> = {
   solana:   { chainId: 200,       chainType: "solana" },
@@ -237,10 +290,27 @@ export class ChainCommand {
           process.exit(1);
         }
 
-        console.log(`\n  Chain ID:   ${chainId}`);
-        console.log(`  Name:       ${chainName || "Unknown"}`);
-        console.log(`  Type:       ${chainType}`);
-        console.log(`  RPC:        ${rpc}`);
+        // ── Step 5: Finality assessment ──
+        const finality = FINALITY_MAP[chainId] || DEFAULT_FINALITY;
+
+        console.log(`\n  Chain ID:    ${chainId}`);
+        console.log(`  Name:        ${chainName || "Unknown"}`);
+        console.log(`  Type:        ${chainType}`);
+        console.log(`  RPC:         ${rpc}`);
+        console.log(`  Finality:    ${finality.name} (type ${finality.type})`);
+        console.log(`  Verifier:    ${finality.verifier}`);
+        if (finality.confirmations) {
+          console.log(`  Confirms:    ${finality.confirmations} blocks`);
+        }
+        console.log(`  Note:        ${finality.note}`);
+
+        if (finality === DEFAULT_FINALITY) {
+          console.log(`\n  ⚠️  No specialized light client verifier exists for chain ${chainId}.`);
+          console.log(`     Taifoon will use DEPTH_BASED finality (${finality.confirmations} confirms).`);
+          console.log(`     For faster finality, contact the Taifoon team to deploy a custom verifier.`);
+          console.log(`     Registry: TaifoonLightClientRegistry (0xC38F...B73)`);
+          console.log(`     See: https://github.com/taifoon-io/taifoon-light-client`);
+        }
 
         if (options.dryRun) {
           console.log(`\n[DRY RUN] Would submit registration to Taifoon warmbed`);
@@ -466,6 +536,9 @@ export class ChainCommand {
 
           const proof = await res.json() as any;
 
+          const finality = FINALITY_MAP[fromChain] || DEFAULT_FINALITY;
+          const dstFinality = FINALITY_MAP[toChain] || DEFAULT_FINALITY;
+
           console.log(`\n✅ Cross-chain proof available!\n`);
           console.log(`  Chain ID:        ${proof.chain_id || fromChain}`);
           console.log(`  Block:           ${proof.block_number || blockNumber}`);
@@ -477,8 +550,30 @@ export class ChainCommand {
             console.log(`  Tx Root:         ${proof.transactions_root.slice(0, 20)}...`);
           }
 
+          console.log(`\n  Finality Path:`);
+          console.log(`  ┌─ Source (${fromChain}): ${finality.name} — ${finality.note}`);
+          console.log(`  │  Verifier: ${finality.verifier}`);
+          if (finality.confirmations) {
+            console.log(`  │  Required confirmations: ${finality.confirmations}`);
+          }
+          console.log(`  │`);
+          console.log(`  └─ Dest (${toChain}): ${dstFinality.name} — ${dstFinality.note}`);
+          console.log(`     Verifier: ${dstFinality.verifier}`);
+
+          if (finality.type === 1) {
+            console.log(`\n  ℹ️  L2 chains inherit Ethereum L1 finality. Proof includes output root anchor.`);
+          }
+          if (finality.type === 3 && finality.confirmations) {
+            console.log(`\n  ℹ️  Depth-based finality: proof valid after ${finality.confirmations} confirmations.`);
+          }
+          if (finality === DEFAULT_FINALITY) {
+            console.log(`\n  ⚠️  No specialized verifier for chain ${fromChain}. Using generic depth-based.`);
+            console.log(`     Deploy a custom verifier via TaifoonLightClientRegistry for faster finality.`);
+          }
+
           console.log(`\n  🎉 Chain ${fromChain} → Chain ${toChain} verification path is live!`);
           console.log(`  Proofs can be verified on-chain using Taifoon Light Client contracts.`);
+          console.log(`  Registry: 0xC38F10789FFeFc78cB611f9d7354B7B237b13B73 (devnet 36927)`);
         } catch (e: any) {
           console.error(`❌ Proof fetch failed: ${e.message}`);
           process.exit(1);
