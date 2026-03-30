@@ -13,11 +13,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Config } from "./Config.ts";
-import {
-  createKeychainSigner,
-  isKeychainKey,
-  loadKeychainConfig,
-} from "./KeychainConfig.ts";
+import { KeychainConfig } from "./KeychainConfig.ts";
 import { KeyPair } from "./KeyPair.ts";
 
 export class Signer {
@@ -58,9 +54,9 @@ export class Signer {
   }
 
   public static async load(name: string): Promise<Signer> {
-    if (isKeychainKey(name)) {
-      const config = loadKeychainConfig(name);
-      const signer = await createKeychainSigner(config);
+    if (KeychainConfig.isKeychainKey(name)) {
+      const config = KeychainConfig.load(name);
+      const signer = await KeychainConfig.createSigner(config);
       return new Signer(signer, null);
     }
 
@@ -73,8 +69,8 @@ export class Signer {
   }
 
   public static async loadAddress(name: string): Promise<string> {
-    if (isKeychainKey(name)) {
-      return loadKeychainConfig(name).address;
+    if (KeychainConfig.isKeychainKey(name)) {
+      return KeychainConfig.load(name).address;
     }
     return (await this.load(name)).address;
   }

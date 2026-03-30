@@ -3,14 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import {
-  createKeychainSigner,
-  isKeychainKey,
-  keychainConfigPath,
-  loadKeychainConfig,
-  saveKeychainConfig,
-  type KeychainConfig,
-} from "./KeychainConfig.ts";
+import { KeychainConfig, type KeychainConfigData } from "./KeychainConfig.ts";
 import { Config } from "./Config.ts";
 
 const TEST_DIR = join(tmpdir(), `jup-test-${Date.now()}`);
@@ -28,7 +21,7 @@ afterEach(() => {
   Config.KEYS_DIR = origKeysDir;
 });
 
-const SAMPLE_CONFIG: KeychainConfig = {
+const SAMPLE_CONFIG: KeychainConfigData = {
   backend: "vault",
   address: "11111111111111111111111111111111",
   params: {
@@ -40,49 +33,49 @@ const SAMPLE_CONFIG: KeychainConfig = {
 
 describe("config round-trip", () => {
   test("save then load returns same data", () => {
-    saveKeychainConfig("test-key", SAMPLE_CONFIG);
-    const loaded = loadKeychainConfig("test-key");
+    KeychainConfig.save("test-key", SAMPLE_CONFIG);
+    const loaded = KeychainConfig.load("test-key");
     expect(loaded).toEqual(SAMPLE_CONFIG);
   });
 
   test("save creates .keychain.json file", () => {
-    saveKeychainConfig("test-key", SAMPLE_CONFIG);
+    KeychainConfig.save("test-key", SAMPLE_CONFIG);
     expect(existsSync(join(TEST_DIR, "test-key.keychain.json"))).toBe(true);
   });
 });
 
 describe("isKeychainKey", () => {
   test("returns true for .keychain.json", () => {
-    saveKeychainConfig("kc-key", SAMPLE_CONFIG);
-    expect(isKeychainKey("kc-key")).toBe(true);
+    KeychainConfig.save("kc-key", SAMPLE_CONFIG);
+    expect(KeychainConfig.isKeychainKey("kc-key")).toBe(true);
   });
 
   test("returns false for regular .json", () => {
     writeFileSync(join(TEST_DIR, "regular.json"), "[]");
-    expect(isKeychainKey("regular")).toBe(false);
+    expect(KeychainConfig.isKeychainKey("regular")).toBe(false);
   });
 
   test("returns false for nonexistent key", () => {
-    expect(isKeychainKey("nope")).toBe(false);
+    expect(KeychainConfig.isKeychainKey("nope")).toBe(false);
   });
 });
 
-describe("loadKeychainConfig", () => {
+describe("load", () => {
   test("throws for nonexistent config", () => {
-    expect(() => loadKeychainConfig("missing")).toThrow(
+    expect(() => KeychainConfig.load("missing")).toThrow(
       'Keychain config "missing" does not exist.'
     );
   });
 });
 
-describe("createKeychainSigner", () => {
+describe("createSigner", () => {
   test("throws for unknown backend", async () => {
     const config = {
       backend: "nonexistent" as any,
       address: "",
       params: {},
     };
-    expect(createKeychainSigner(config)).rejects.toThrow(
+    expect(KeychainConfig.createSigner(config)).rejects.toThrow(
       'Unknown keychain backend: "nonexistent"'
     );
   });
@@ -91,7 +84,7 @@ describe("createKeychainSigner", () => {
     const saved = process.env.VAULT_TOKEN;
     delete process.env.VAULT_TOKEN;
     try {
-      const config: KeychainConfig = {
+      const config: KeychainConfigData = {
         backend: "vault",
         address: "",
         params: {
@@ -100,7 +93,7 @@ describe("createKeychainSigner", () => {
           publicKey: "11111111111111111111111111111111",
         },
       };
-      expect(createKeychainSigner(config)).rejects.toThrow(
+      expect(KeychainConfig.createSigner(config)).rejects.toThrow(
         "Missing required environment variable: VAULT_TOKEN"
       );
     } finally {

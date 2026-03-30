@@ -109,7 +109,7 @@ jup keys edit <name> --seed-phrase "word1 word2 ..." --derivation-path "m/44'/50
 jup keys edit <name> --private-key <key>
 ```
 
-Rename a key and/or replace its credentials. Options can be combined. `--seed-phrase` and `--private-key` are mutually exclusive and only apply to local keypairs (not keychain-backed keys).
+Rename a key and/or replace its credentials. Options can be combined. `--seed-phrase` and `--private-key` are mutually exclusive and only apply to local keypairs. Keychain-backed keys only support `--name` (rename) — to change backend parameters, delete and re-add the key.
 
 ### Delete a key
 
