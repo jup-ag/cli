@@ -1,6 +1,5 @@
 import ky from "ky";
 
-import { ClientConfig } from "./ClientConfig.ts";
 
 export type CheckEligibilityResponse = {
   tokenExists: boolean;
@@ -77,7 +76,6 @@ export type ExecuteResponse = {
 export class VrfdClient {
   static readonly #ky = ky.create({
     prefixUrl: "https://token-verification-dev-api.jup.ag",
-    headers: ClientConfig.headers,
   });
 
   public static async checkEligibility(
