@@ -24,7 +24,10 @@ export class VrfdCommand {
       .command("submit")
       .description("Submit a token verification request")
       .requiredOption("--token <mint>", "Token mint address to verify")
-      .requiredOption("--twitter <handle>", "Project Twitter/X handle or URL")
+      .requiredOption(
+        "--project-twitter <handle>",
+        "Project Twitter/X handle or URL"
+      )
       .requiredOption("--description <text>", "Reason for verification request")
       .option("--sender-twitter <handle>", "Submitter's Twitter/X handle")
       .option("--meta-icon <url>", "Token icon URL")
@@ -100,7 +103,7 @@ export class VrfdCommand {
 
   private static async submit(opts: {
     token: string;
-    twitter: string;
+    projectTwitter: string;
     description: string;
     senderTwitter?: string;
     key?: string;
@@ -187,7 +190,7 @@ export class VrfdCommand {
       requestId: craftResult.requestId,
       senderAddress: signer.address,
       tokenId: opts.token,
-      twitterHandle: opts.twitter,
+      twitterHandle: opts.projectTwitter,
       senderTwitterHandle: opts.senderTwitter,
       description: opts.description,
       tokenMetadata,
@@ -203,8 +206,12 @@ export class VrfdCommand {
         tokenId: opts.token,
         status: result.status,
         signature: result.signature ?? null,
+        paymentAmount,
+        paymentMint: craftResult.mint,
+        feeUsd: craftResult.feeUsdAmount ?? null,
         verificationCreated: result.verificationCreated,
         metadataCreated: result.metadataCreated,
+        metadata: tokenMetadata ?? null,
       });
       return;
     }
@@ -214,6 +221,7 @@ export class VrfdCommand {
       rows: [
         { label: "Status", value: result.status },
         { label: "Token", value: opts.token },
+        { label: "Payment", value: `${paymentAmount} JUP` },
         {
           label: "Verification Created",
           value: Output.formatBoolean(result.verificationCreated),
@@ -222,6 +230,7 @@ export class VrfdCommand {
           label: "Metadata Created",
           value: Output.formatBoolean(result.metadataCreated),
         },
+        ...this.metadataRows(tokenMetadata),
         ...(result.signature
           ? [{ label: "Tx Signature", value: result.signature }]
           : []),
@@ -233,7 +242,7 @@ export class VrfdCommand {
     signer: Signer,
     opts: {
       token: string;
-      twitter: string;
+      projectTwitter: string;
       description: string;
     },
     craftResult: CraftTxnResponse,
@@ -245,14 +254,14 @@ export class VrfdCommand {
         dryRun: true,
         sender: signer.address,
         tokenId: opts.token,
-        twitterHandle: opts.twitter,
+        twitterHandle: opts.projectTwitter,
         description: opts.description,
         paymentAmount,
         paymentMint: craftResult.mint,
         feeLamports: craftResult.feeLamports,
         feeUsdAmount: craftResult.feeUsdAmount ?? null,
         gasless: craftResult.gasless,
-        hasMetadata: !!tokenMetadata,
+        metadata: tokenMetadata ?? null,
         signature: null,
         transaction: craftResult.transaction,
       });
@@ -265,7 +274,7 @@ export class VrfdCommand {
       rows: [
         { label: "Sender", value: signer.address },
         { label: "Token", value: opts.token },
-        { label: "Twitter", value: opts.twitter },
+        { label: "Twitter", value: opts.projectTwitter },
         { label: "Description", value: opts.description },
         { label: "Payment", value: `${paymentAmount} JUP` },
         {
@@ -276,8 +285,48 @@ export class VrfdCommand {
           label: "Metadata Update",
           value: Output.formatBoolean(!!tokenMetadata),
         },
+        ...this.metadataRows(tokenMetadata),
       ],
     });
+  }
+
+  private static metadataRows(
+    metadata: TokenMetadata | undefined
+  ): { label: string; value: string }[] {
+    if (!metadata) {
+      return [];
+    }
+
+    const labels: Record<string, string> = {
+      name: "Meta: Name",
+      symbol: "Meta: Symbol",
+      icon: "Meta: Icon",
+      tokenDescription: "Meta: Description",
+      website: "Meta: Website",
+      twitter: "Meta: Twitter",
+      twitterCommunity: "Meta: Twitter Community",
+      telegram: "Meta: Telegram",
+      discord: "Meta: Discord",
+      instagram: "Meta: Instagram",
+      tiktok: "Meta: TikTok",
+      circulatingSupply: "Meta: Circulating Supply",
+      coingeckoCoinId: "Meta: CoinGecko ID",
+      circulatingSupplyUrl: "Meta: Circulating Supply URL",
+      otherUrl: "Meta: Other URL",
+      useCirculatingSupply: "Meta: Use Circulating Supply",
+      useCoingeckoCoinId: "Meta: Use CoinGecko ID",
+      useCirculatingSupplyUrl: "Meta: Use Circulating Supply URL",
+    };
+
+    return Object.entries(metadata)
+      .filter(([key]) => key !== "tokenId" && labels[key])
+      .map(([key, value]) => ({
+        label: labels[key]!,
+        value:
+          typeof value === "boolean"
+            ? Output.formatBoolean(value)
+            : String(value),
+      }));
   }
 
   private static buildTokenMetadata(

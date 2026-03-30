@@ -27,16 +27,16 @@ jup vrfd check --token <mint-address>
 ### Submit verification
 
 ```bash
-jup vrfd submit --token <mint> --twitter @projecthandle --description "DeFi protocol on Solana"
-jup vrfd submit --token <mint> --twitter @projecthandle --description "DEX aggregator" --key mykey
-jup vrfd submit --token <mint> --twitter @projecthandle --description "Lending protocol" --sender-twitter @myhandle
-jup vrfd submit --token <mint> --twitter @projecthandle --description "NFT marketplace" \
+jup vrfd submit --token <mint> --project-twitter @projecthandle --description "DeFi protocol on Solana"
+jup vrfd submit --token <mint> --project-twitter @projecthandle --description "DEX aggregator" --key mykey
+jup vrfd submit --token <mint> --project-twitter @projecthandle --description "Lending protocol" --sender-twitter @myhandle
+jup vrfd submit --token <mint> --project-twitter @projecthandle --description "NFT marketplace" \
   --meta-name "Token Name" --meta-symbol "TKN" --meta-website "https://example.com"
-jup vrfd submit --token <mint> --twitter @projecthandle --description "Payment token" --dry-run
+jup vrfd submit --token <mint> --project-twitter @projecthandle --description "Payment token" --dry-run
 ```
 
 - `--token` (required): token mint address to verify
-- `--twitter` (required): project's Twitter/X handle or URL
+- `--project-twitter` (required): project's Twitter/X handle or URL
 - `--description` (required): reason for verification request
 - `--sender-twitter`: submitter's Twitter/X handle (optional)
 - `--meta-*`: inline token metadata fields (optional, see [metadata options](#metadata-options) below)
@@ -50,6 +50,9 @@ jup vrfd submit --token <mint> --twitter @projecthandle --description "Payment t
   "tokenId": "So11111111111111111111111111111111111111112",
   "status": "Success",
   "signature": "2Goj...diEc",
+  "paymentAmount": "1",
+  "paymentMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+  "feeUsd": 0.85,
   "verificationCreated": true,
   "metadataCreated": false
 }
@@ -66,7 +69,7 @@ Pass token metadata inline with `--meta-` prefixed options. All are optional.
 - `--meta-icon <url>`: Token icon URL
 - `--meta-description <text>`: Token description
 - `--meta-website <url>`: Token website URL
-- `--meta-twitter <url>`: Token Twitter/X URL (distinct from `--twitter`, which is the project handle for the verification request)
+- `--meta-twitter <url>`: Token Twitter/X URL (distinct from `--project-twitter`, which is the project handle for the verification request)
 - `--meta-twitter-community <url>`: Twitter community URL
 - `--meta-telegram <url>`: Telegram group URL
 - `--meta-discord <url>`: Discord server URL
@@ -90,13 +93,13 @@ Pass token metadata inline with `--meta-` prefixed options. All are optional.
 ```bash
 jup vrfd check --token <mint>
 # Confirm canVerify is true
-jup vrfd submit --token <mint> --twitter @project --description "My token"
+jup vrfd submit --token <mint> --project-twitter @project --description "My token"
 ```
 
 ### Submit with metadata update
 
 ```bash
-jup vrfd submit --token <mint> --twitter @project --description "My token" \
+jup vrfd submit --token <mint> --project-twitter @project --description "My token" \
   --meta-name "Token Name" --meta-symbol "TKN" \
   --meta-website "https://example.com" --meta-twitter "https://x.com/token"
 ```
@@ -104,7 +107,7 @@ jup vrfd submit --token <mint> --twitter @project --description "My token" \
 ### Preview before submitting
 
 ```bash
-jup vrfd submit --token <mint> --twitter @project --description "My token" --dry-run
+jup vrfd submit --token <mint> --project-twitter @project --description "My token" --dry-run
 # Review the details, then run without --dry-run
-jup vrfd submit --token <mint> --twitter @project --description "My token"
+jup vrfd submit --token <mint> --project-twitter @project --description "My token"
 ```
