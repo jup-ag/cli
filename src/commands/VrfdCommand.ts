@@ -17,12 +17,12 @@ export class VrfdCommand {
     const vrfd = program.command("vrfd").description("Token verification");
     vrfd
       .command("check")
-      .description("Check if a token is eligible for express verification")
+      .description("Check if a token is eligible for verification")
       .requiredOption("--token <mint>", "Token mint address")
       .action((opts) => this.check(opts));
     vrfd
       .command("submit")
-      .description("Submit an express token verification request")
+      .description("Submit a token verification request")
       .requiredOption("--token <mint>", "Token mint address to verify")
       .requiredOption("--twitter <handle>", "Project Twitter/X handle or URL")
       .requiredOption("--description <text>", "Reason for verification request")
