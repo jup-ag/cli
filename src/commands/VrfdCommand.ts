@@ -1,4 +1,4 @@
-import type { Base64EncodedBytes } from "@solana/kit";
+import { isAddress, type Base64EncodedBytes } from "@solana/kit";
 
 import type { Command } from "commander";
 
@@ -59,6 +59,9 @@ export class VrfdCommand {
   }
 
   private static async check(opts: { token: string }): Promise<void> {
+    if (!isAddress(opts.token)) {
+      throw new Error("Invalid token mint address.");
+    }
     const eligibility = await VrfdClient.checkEligibility(opts.token);
 
     if (Output.isJson()) {
@@ -128,6 +131,10 @@ export class VrfdCommand {
   }): Promise<void> {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
+
+    if (!isAddress(opts.token)) {
+      throw new Error("Invalid token mint address.");
+    }
 
     // Check eligibility before crafting transaction
     const eligibility = await VrfdClient.checkEligibility(opts.token);
