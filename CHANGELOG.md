@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.0
+
+### Features
+
+- Add `solana-keychain` support with 10 remote/managed key backends (AWS KMS, CDP, Crossmint, Dfns, Fireblocks, GCP KMS, Para, Privy, Turnkey, Vault) (#13)
+
 ## v0.6.0
 
 ### Features
