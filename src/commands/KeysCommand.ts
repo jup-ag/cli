@@ -11,10 +11,19 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { Config } from "../lib/Config.ts";
+import {
+  KeychainConfig,
+  type KeychainBackend,
+  type KeychainConfigData,
+} from "../lib/KeychainConfig.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 
 export class KeysCommand {
+  private static readonly VALID_BACKENDS = Object.keys(
+    KeychainConfig.BACKENDS
+  ).join(", ");
+
   public static register(program: Command): void {
     const keys = program.command("keys").description("Private key management");
     keys
@@ -36,6 +45,11 @@ export class KeysCommand {
         "--private-key <key>",
         "Import from private key (hex, base58, base64, or JSON byte array)"
       )
+      .option(
+        "--backend <type>",
+        `Keychain backend (${this.VALID_BACKENDS})`
+      )
+      .option("--param <key=value...>", "Backend parameters (repeatable)")
       .action((name, opts) => this.add(name, opts));
     keys
       .command("delete <name>")
@@ -66,26 +80,76 @@ export class KeysCommand {
       .action((opts) => this.solanaImport(opts));
   }
 
+  private static keyExists(name: string): boolean {
+    return (
+      existsSync(join(Config.KEYS_DIR, `${name}.json`)) ||
+      KeychainConfig.isKeychainKey(name)
+    );
+  }
+
+  private static removeKey(name: string): void {
+    const keypairPath = join(Config.KEYS_DIR, `${name}.json`);
+    const kcPath = KeychainConfig.configPath(name);
+    if (existsSync(keypairPath)) {
+      rmSync(keypairPath);
+    }
+    if (existsSync(kcPath)) {
+      rmSync(kcPath);
+    }
+  }
+
+  private static parseParams(paramArgs: string[]): Record<string, string> {
+    const params: Record<string, string> = {};
+    for (const arg of paramArgs) {
+      const eqIdx = arg.indexOf("=");
+      if (eqIdx === -1) {
+        throw new Error(
+          `Invalid --param format: "${arg}". Expected key=value.`
+        );
+      }
+      params[arg.slice(0, eqIdx)] = arg.slice(eqIdx + 1);
+    }
+    return params;
+  }
+
   private static async list(): Promise<void> {
     if (!existsSync(Config.KEYS_DIR)) {
       throw new Error("No keys found.");
     }
 
-    const files = readdirSync(Config.KEYS_DIR).filter((f) =>
-      f.endsWith(".json")
-    );
+    const files = readdirSync(Config.KEYS_DIR);
     const settings = Config.load();
-    const data = await Promise.all(
-      files.map(async (file) => {
+
+    const keypairFiles = files.filter(
+      (f) => f.endsWith(".json") && !f.endsWith(".keychain.json")
+    );
+    const keychainFiles = files.filter((f) => f.endsWith(".keychain.json"));
+
+    const keypairData = await Promise.all(
+      keypairFiles.map(async (file) => {
         const name = file.replace(".json", "");
         const signer = await Signer.load(name);
         return {
           name,
           address: signer.address,
+          type: "keypair",
           active: settings.activeKey === name,
         };
       })
     );
+
+    const keychainData = keychainFiles.map((file) => {
+      const name = file.replace(".keychain.json", "");
+      const config = KeychainConfig.load(name);
+      return {
+        name,
+        address: config.address,
+        type: config.backend,
+        active: settings.activeKey === name,
+      };
+    });
+
+    const data = [...keypairData, ...keychainData];
 
     if (Output.isJson()) {
       Output.json(data);
@@ -94,7 +158,12 @@ export class KeysCommand {
 
     Output.table({
       type: "horizontal",
-      headers: { name: "Name", address: "Address", active: "Active" },
+      headers: {
+        name: "Name",
+        address: "Address",
+        type: "Type",
+        active: "Active",
+      },
       rows: data.map((d) => ({
         ...d,
         active: Output.formatBoolean(d.active),
@@ -110,10 +179,30 @@ export class KeysCommand {
       seedPhrase?: string;
       derivationPath?: string;
       privateKey?: string;
+      backend?: string;
+      param?: string[];
     } = {}
   ): Promise<void> {
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-    if (existsSync(keyPath) && !opts.overwrite) {
+    const isKeychain = !!opts.backend;
+
+    if (isKeychain) {
+      const keypairModes = [
+        opts.file,
+        opts.seedPhrase,
+        opts.privateKey,
+      ].filter(Boolean);
+      if (keypairModes.length > 0) {
+        throw new Error(
+          "--backend is mutually exclusive with --file, --seed-phrase, and --private-key."
+        );
+      }
+      return this.addKeychain(
+        name,
+        opts as { backend: string; param?: string[]; overwrite?: boolean }
+      );
+    }
+
+    if (this.keyExists(name) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
@@ -142,17 +231,85 @@ export class KeysCommand {
     } else {
       signer = await Signer.generate();
     }
+    if (opts.overwrite) {
+      this.removeKey(name);
+    }
     signer.save(name);
 
     this.list();
   }
 
+  private static async addKeychain(
+    name: string,
+    opts: {
+      backend: string;
+      param?: string[];
+      overwrite?: boolean;
+    }
+  ): Promise<void> {
+    const backend = opts.backend as KeychainBackend;
+    if (!(backend in KeychainConfig.BACKENDS)) {
+      throw new Error(
+        `Unknown backend "${opts.backend}". Valid backends: ${this.VALID_BACKENDS}`
+      );
+    }
+
+    if (this.keyExists(name) && !opts.overwrite) {
+      throw new Error(
+        `Key "${name}" already exists. Use --overwrite to replace.`
+      );
+    }
+
+    const params = this.parseParams(opts.param ?? []);
+    const def = KeychainConfig.BACKENDS[backend];
+    const knownParams = new Set([
+      ...def.requiredParams,
+      ...def.optionalParams,
+    ]);
+
+    for (const required of def.requiredParams) {
+      if (!params[required]) {
+        throw new Error(
+          `Missing required parameter "${required}" for ${backend}. ` +
+            `Required: ${def.requiredParams.join(", ")}` +
+            (def.optionalParams.length > 0
+              ? `. Optional: ${def.optionalParams.join(", ")}`
+              : "")
+        );
+      }
+    }
+
+    const unknownParams = Object.keys(params).filter(
+      (k) => !knownParams.has(k)
+    );
+    if (unknownParams.length > 0) {
+      throw new Error(
+        `Unknown parameter(s) for ${backend}: ${unknownParams.join(", ")}. ` +
+          `Valid: ${[...knownParams].join(", ")}`
+      );
+    }
+
+    const config: KeychainConfigData = {
+      backend,
+      address: "",
+      params,
+    };
+
+    const signer = await KeychainConfig.createSigner(config);
+    config.address = signer.address;
+
+    if (opts.overwrite) {
+      this.removeKey(name);
+    }
+    KeychainConfig.save(name, config);
+    this.list();
+  }
+
   private static delete(name: string): void {
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-    if (!existsSync(keyPath)) {
+    if (!this.keyExists(name)) {
       throw new Error(`Key "${name}" not found.`);
     }
-    rmSync(keyPath);
+    this.removeKey(name);
     this.list();
   }
 
@@ -176,9 +333,19 @@ export class KeysCommand {
       );
     }
 
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
+    const isKeychain = KeychainConfig.isKeychainKey(name);
+    const keyPath = isKeychain
+      ? KeychainConfig.configPath(name)
+      : join(Config.KEYS_DIR, `${name}.json`);
+
     if (!existsSync(keyPath)) {
       throw new Error(`Key "${name}" not found.`);
+    }
+
+    if (isKeychain && (opts.seedPhrase || opts.privateKey)) {
+      throw new Error(
+        "Cannot replace credentials for a keychain-backed key."
+      );
     }
 
     if (opts.seedPhrase || opts.privateKey) {
@@ -189,10 +356,12 @@ export class KeysCommand {
     }
 
     if (opts.name) {
-      const newPath = join(Config.KEYS_DIR, `${opts.name}.json`);
-      if (existsSync(newPath)) {
+      if (this.keyExists(opts.name)) {
         throw new Error(`Key "${opts.name}" already exists.`);
       }
+      const newPath = isKeychain
+        ? KeychainConfig.configPath(opts.name)
+        : join(Config.KEYS_DIR, `${opts.name}.json`);
       renameSync(keyPath, newPath);
       const settings = Config.load();
       if (settings.activeKey === name) {
@@ -204,8 +373,7 @@ export class KeysCommand {
   }
 
   private static use(name: string): void {
-    const keyPath = join(Config.KEYS_DIR, `${name}.json`);
-    if (!existsSync(keyPath)) {
+    if (!this.keyExists(name)) {
       throw new Error(`Key "${name}" not found.`);
     }
     Config.set({ activeKey: name });
@@ -226,13 +394,16 @@ export class KeysCommand {
       throw new Error(`Solana keypair not found at: ${sourcePath}`);
     }
 
-    const destPath = join(Config.KEYS_DIR, `${name}.json`);
-    if (existsSync(destPath) && !opts.overwrite) {
+    if (this.keyExists(name) && !opts.overwrite) {
       throw new Error(
         `Key "${name}" already exists. Use --overwrite to replace.`
       );
     }
 
+    if (opts.overwrite) {
+      this.removeKey(name);
+    }
+    const destPath = join(Config.KEYS_DIR, `${name}.json`);
     copyFileSync(sourcePath, destPath);
     this.list();
   }
