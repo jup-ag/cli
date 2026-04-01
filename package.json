@@ -25,9 +25,11 @@
     "build": "bun build src/index.ts --outdir dist --target node --format esm --minify",
     "build:binary": "bash scripts/build.sh",
     "typecheck": "bunx tsc --noEmit",
+    "fmt": "bunx prettier --write .",
+    "fmt:check": "bunx prettier --check .",
     "lint": "bunx oxlint src",
     "test": "bun test",
-    "ci": "bun run lint && bun run typecheck && bun run test",
+    "ci": "bun run fmt:check && bun run lint && bun run typecheck && bun run test",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {

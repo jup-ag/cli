@@ -118,7 +118,7 @@ export class PerpsCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
     const [positionsRes, ordersRes] = await Promise.all([
       PerpsClient.getPositions(address),
@@ -945,7 +945,7 @@ export class PerpsCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
     const mint = opts.asset ? resolveAsset(opts.asset).id : undefined;
 
     const res = await PerpsClient.getTrades({

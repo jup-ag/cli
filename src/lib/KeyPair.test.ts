@@ -71,8 +71,7 @@ describe("fromSeedPhrase", () => {
 });
 
 describe("fromSeedPhrase — uses SLIP10 for all-hardened paths", () => {
-  const toAddress = (kp: KeyPair) =>
-    getBase58Decoder().decode(kp.publicKey);
+  const toAddress = (kp: KeyPair) => getBase58Decoder().decode(kp.publicKey);
 
   test("derives correct addresses for m/44'/501'/x'/0'", async () => {
     for (const { index, address } of [
@@ -103,42 +102,27 @@ describe("fromSeedPhrase — uses SLIP10 for all-hardened paths", () => {
   });
 
   test("different account indices derive different keypairs", async () => {
-    const a = await KeyPair.fromSeedPhrase(
-      TEST_MNEMONIC,
-      "m/44'/501'/0'/0'"
-    );
-    const b = await KeyPair.fromSeedPhrase(
-      TEST_MNEMONIC,
-      "m/44'/501'/1'/0'"
-    );
+    const a = await KeyPair.fromSeedPhrase(TEST_MNEMONIC, "m/44'/501'/0'/0'");
+    const b = await KeyPair.fromSeedPhrase(TEST_MNEMONIC, "m/44'/501'/1'/0'");
     expect(a.publicKey).not.toEqual(b.publicKey);
     expect(a.privateKey).not.toEqual(b.privateKey);
   });
 });
 
 describe("fromSeedPhrase — uses BIP32 for non-hardened paths", () => {
-  const toAddress = (kp: KeyPair) =>
-    getBase58Decoder().decode(kp.publicKey);
+  const toAddress = (kp: KeyPair) => getBase58Decoder().decode(kp.publicKey);
 
   test("derives correct address for m/44'/501'/0'/0/0", async () => {
     const kp = await KeyPair.fromSeedPhrase(
       "flee artwork post brown april bulk wash limb melody zoo rib law",
       "m/44'/501'/0'/0/0"
     );
-    expect(toAddress(kp)).toBe(
-      "F8oiKU5wmZs8jZQng1zyzbcHPkvECSwHitFJvuc5rQGP"
-    );
+    expect(toAddress(kp)).toBe("F8oiKU5wmZs8jZQng1zyzbcHPkvECSwHitFJvuc5rQGP");
   });
 
   test("same non-hardened path is deterministic", async () => {
-    const a = await KeyPair.fromSeedPhrase(
-      TEST_MNEMONIC,
-      "m/44'/501'/0'/0"
-    );
-    const b = await KeyPair.fromSeedPhrase(
-      TEST_MNEMONIC,
-      "m/44'/501'/0'/0"
-    );
+    const a = await KeyPair.fromSeedPhrase(TEST_MNEMONIC, "m/44'/501'/0'/0");
+    const b = await KeyPair.fromSeedPhrase(TEST_MNEMONIC, "m/44'/501'/0'/0");
     expect(a.privateKey).toEqual(b.privateKey);
     expect(a.publicKey).toEqual(b.publicKey);
   });

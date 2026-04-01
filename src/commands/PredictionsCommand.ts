@@ -240,7 +240,7 @@ export class PredictionsCommand {
     } else {
       const address =
         opts.address ??
-        await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+        (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
       const res = await PredictionsClient.getPositions(address);
       data = res.data;
     }
@@ -393,7 +393,7 @@ export class PredictionsCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
     const res = await PredictionsClient.getHistory({
       ownerPubkey: address,

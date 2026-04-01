@@ -125,7 +125,7 @@ export class LendCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
     const allPositions = await LendClient.getPositions(address);
     let activePositions = allPositions.filter((p) => p.shares !== "0");
