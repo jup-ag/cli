@@ -29,22 +29,6 @@ type BackendDef = {
   create: (params: Record<string, string>) => Promise<SolanaSigner>;
 };
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-function requireParam(params: Record<string, string>, name: string): string {
-  const value = params[name];
-  if (!value) {
-    throw new Error(`Missing required parameter: ${name}`);
-  }
-  return value;
-}
-
 export class KeychainConfig {
   static readonly BACKENDS: Record<KeychainBackend, BackendDef> = {
     "aws-kms": {
@@ -52,12 +36,10 @@ export class KeychainConfig {
       requiredParams: ["keyId", "publicKey"],
       optionalParams: ["region"],
       create: async (params) => {
-        const { createAwsKmsSigner } = await import(
-          "@solana/keychain-aws-kms"
-        );
+        const { createAwsKmsSigner } = await import("@solana/keychain-aws-kms");
         return createAwsKmsSigner({
-          keyId: requireParam(params, "keyId"),
-          publicKey: requireParam(params, "publicKey"),
+          keyId: this.requireParam(params, "keyId"),
+          publicKey: this.requireParam(params, "publicKey"),
           region: params.region,
         });
       },
@@ -73,10 +55,10 @@ export class KeychainConfig {
       create: async (params) => {
         const { createCdpSigner } = await import("@solana/keychain-cdp");
         return createCdpSigner({
-          cdpApiKeyId: requireEnv("CDP_API_KEY_ID"),
-          cdpApiKeySecret: requireEnv("CDP_API_KEY_SECRET"),
-          cdpWalletSecret: requireEnv("CDP_WALLET_SECRET"),
-          address: requireParam(params, "address"),
+          cdpApiKeyId: this.requireEnv("CDP_API_KEY_ID"),
+          cdpApiKeySecret: this.requireEnv("CDP_API_KEY_SECRET"),
+          cdpWalletSecret: this.requireEnv("CDP_WALLET_SECRET"),
+          address: this.requireParam(params, "address"),
           baseUrl: params.baseUrl,
         });
       },
@@ -86,12 +68,11 @@ export class KeychainConfig {
       requiredParams: ["walletLocator"],
       optionalParams: ["signer"],
       create: async (params) => {
-        const { createCrossmintSigner } = await import(
-          "@solana/keychain-crossmint"
-        );
+        const { createCrossmintSigner } =
+          await import("@solana/keychain-crossmint");
         return createCrossmintSigner({
-          apiKey: requireEnv("CROSSMINT_API_KEY"),
-          walletLocator: requireParam(params, "walletLocator"),
+          apiKey: this.requireEnv("CROSSMINT_API_KEY"),
+          walletLocator: this.requireParam(params, "walletLocator"),
           signer: params.signer,
         });
       },
@@ -103,10 +84,10 @@ export class KeychainConfig {
       create: async (params) => {
         const { createDfnsSigner } = await import("@solana/keychain-dfns");
         return createDfnsSigner({
-          authToken: requireEnv("DFNS_AUTH_TOKEN"),
-          credId: requireParam(params, "credId"),
-          privateKeyPem: requireEnv("DFNS_PRIVATE_KEY_PEM"),
-          walletId: requireParam(params, "walletId"),
+          authToken: this.requireEnv("DFNS_AUTH_TOKEN"),
+          credId: this.requireParam(params, "credId"),
+          privateKeyPem: this.requireEnv("DFNS_PRIVATE_KEY_PEM"),
+          walletId: this.requireParam(params, "walletId"),
           apiBaseUrl: params.apiBaseUrl,
         });
       },
@@ -116,13 +97,12 @@ export class KeychainConfig {
       requiredParams: ["vaultAccountId"],
       optionalParams: ["assetId"],
       create: async (params) => {
-        const { createFireblocksSigner } = await import(
-          "@solana/keychain-fireblocks"
-        );
+        const { createFireblocksSigner } =
+          await import("@solana/keychain-fireblocks");
         return createFireblocksSigner({
-          apiKey: requireEnv("FIREBLOCKS_API_KEY"),
-          privateKeyPem: requireEnv("FIREBLOCKS_PRIVATE_KEY_PEM"),
-          vaultAccountId: requireParam(params, "vaultAccountId"),
+          apiKey: this.requireEnv("FIREBLOCKS_API_KEY"),
+          privateKeyPem: this.requireEnv("FIREBLOCKS_PRIVATE_KEY_PEM"),
+          vaultAccountId: this.requireParam(params, "vaultAccountId"),
           assetId: params.assetId,
         });
       },
@@ -132,12 +112,10 @@ export class KeychainConfig {
       requiredParams: ["keyName", "publicKey"],
       optionalParams: [],
       create: async (params) => {
-        const { createGcpKmsSigner } = await import(
-          "@solana/keychain-gcp-kms"
-        );
+        const { createGcpKmsSigner } = await import("@solana/keychain-gcp-kms");
         return createGcpKmsSigner({
-          keyName: requireParam(params, "keyName"),
-          publicKey: requireParam(params, "publicKey"),
+          keyName: this.requireParam(params, "keyName"),
+          publicKey: this.requireParam(params, "publicKey"),
         });
       },
     },
@@ -148,8 +126,8 @@ export class KeychainConfig {
       create: async (params) => {
         const { createParaSigner } = await import("@solana/keychain-para");
         return createParaSigner({
-          apiKey: requireEnv("PARA_API_KEY"),
-          walletId: requireParam(params, "walletId"),
+          apiKey: this.requireEnv("PARA_API_KEY"),
+          walletId: this.requireParam(params, "walletId"),
           apiBaseUrl: params.apiBaseUrl,
         });
       },
@@ -161,9 +139,9 @@ export class KeychainConfig {
       create: async (params) => {
         const { createPrivySigner } = await import("@solana/keychain-privy");
         return createPrivySigner({
-          appId: requireParam(params, "appId"),
-          appSecret: requireEnv("PRIVY_APP_SECRET"),
-          walletId: requireParam(params, "walletId"),
+          appId: this.requireParam(params, "appId"),
+          appSecret: this.requireEnv("PRIVY_APP_SECRET"),
+          walletId: this.requireParam(params, "walletId"),
           apiBaseUrl: params.apiBaseUrl,
         });
       },
@@ -178,15 +156,14 @@ export class KeychainConfig {
       ],
       optionalParams: ["apiBaseUrl"],
       create: async (params) => {
-        const { createTurnkeySigner } = await import(
-          "@solana/keychain-turnkey"
-        );
+        const { createTurnkeySigner } =
+          await import("@solana/keychain-turnkey");
         return createTurnkeySigner({
-          apiPublicKey: requireParam(params, "apiPublicKey"),
-          apiPrivateKey: requireEnv("TURNKEY_API_PRIVATE_KEY"),
-          organizationId: requireParam(params, "organizationId"),
-          privateKeyId: requireParam(params, "privateKeyId"),
-          publicKey: requireParam(params, "publicKey"),
+          apiPublicKey: this.requireParam(params, "apiPublicKey"),
+          apiPrivateKey: this.requireEnv("TURNKEY_API_PRIVATE_KEY"),
+          organizationId: this.requireParam(params, "organizationId"),
+          privateKeyId: this.requireParam(params, "privateKeyId"),
+          publicKey: this.requireParam(params, "publicKey"),
           apiBaseUrl: params.apiBaseUrl,
         });
       },
@@ -198,10 +175,10 @@ export class KeychainConfig {
       create: async (params) => {
         const { createVaultSigner } = await import("@solana/keychain-vault");
         return createVaultSigner({
-          vaultAddr: requireParam(params, "vaultAddr"),
-          vaultToken: requireEnv("VAULT_TOKEN"),
-          keyName: requireParam(params, "keyName"),
-          publicKey: requireParam(params, "publicKey"),
+          vaultAddr: this.requireParam(params, "vaultAddr"),
+          vaultToken: this.requireEnv("VAULT_TOKEN"),
+          keyName: this.requireParam(params, "keyName"),
+          publicKey: this.requireParam(params, "publicKey"),
         });
       },
     },
@@ -235,8 +212,27 @@ export class KeychainConfig {
       throw new Error(`Unknown keychain backend: "${config.backend}"`);
     }
     for (const envVar of def.requiredEnvVars) {
-      requireEnv(envVar);
+      this.requireEnv(envVar);
     }
     return def.create(config.params);
+  }
+
+  private static requireEnv(name: string): string {
+    const value = process.env[name];
+    if (!value) {
+      throw new Error(`Missing required environment variable: ${name}`);
+    }
+    return value;
+  }
+
+  private static requireParam(
+    params: Record<string, string>,
+    name: string
+  ): string {
+    const value = params[name];
+    if (!value) {
+      throw new Error(`Missing required parameter: ${name}`);
+    }
+    return value;
   }
 }
