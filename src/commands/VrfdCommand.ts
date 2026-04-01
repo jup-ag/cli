@@ -2,11 +2,7 @@ import { isAddress, type Base64EncodedBytes } from "@solana/kit";
 
 import type { Command } from "commander";
 
-import {
-  VrfdClient,
-  type CraftTxnResponse,
-  type TokenMetadata,
-} from "../clients/VrfdClient.ts";
+import { VrfdClient, type TokenMetadata } from "../clients/VrfdClient.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
@@ -177,13 +173,44 @@ export class VrfdCommand {
     );
 
     if (Config.dryRun) {
-      this.outputDryRun(
-        signer,
-        opts,
-        craftResult,
-        paymentAmount,
-        tokenMetadata
-      );
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          sender: signer.address,
+          tokenId: opts.token,
+          status: null,
+          signature: null,
+          paymentAmount,
+          paymentMint: craftResult.mint,
+          feeUsd: craftResult.feeUsdAmount ?? null,
+          verificationCreated: null,
+          metadataCreated: null,
+          metadata: tokenMetadata ?? null,
+          transaction: craftResult.transaction,
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          { label: "Sender", value: signer.address },
+          { label: "Token", value: opts.token },
+          { label: "Twitter", value: opts.projectTwitter },
+          { label: "Description", value: opts.description },
+          { label: "Payment", value: `${paymentAmount} JUP` },
+          {
+            label: "Gasless",
+            value: Output.formatBoolean(craftResult.gasless),
+          },
+          {
+            label: "Metadata Update",
+            value: Output.formatBoolean(!!tokenMetadata),
+          },
+          ...this.metadataRows(tokenMetadata),
+        ],
+      });
       return;
     }
 
@@ -241,58 +268,6 @@ export class VrfdCommand {
         ...(result.signature
           ? [{ label: "Tx Signature", value: result.signature }]
           : []),
-      ],
-    });
-  }
-
-  private static outputDryRun(
-    signer: Signer,
-    opts: {
-      token: string;
-      projectTwitter: string;
-      description: string;
-    },
-    craftResult: CraftTxnResponse,
-    paymentAmount: string,
-    tokenMetadata: TokenMetadata | undefined
-  ): void {
-    if (Output.isJson()) {
-      Output.json({
-        dryRun: true,
-        sender: signer.address,
-        tokenId: opts.token,
-        twitterHandle: opts.projectTwitter,
-        description: opts.description,
-        paymentAmount,
-        paymentMint: craftResult.mint,
-        feeLamports: craftResult.feeLamports,
-        feeUsdAmount: craftResult.feeUsdAmount ?? null,
-        gasless: craftResult.gasless,
-        metadata: tokenMetadata ?? null,
-        signature: null,
-        transaction: craftResult.transaction,
-      });
-      return;
-    }
-
-    console.log(Output.DRY_RUN_LABEL);
-    Output.table({
-      type: "vertical",
-      rows: [
-        { label: "Sender", value: signer.address },
-        { label: "Token", value: opts.token },
-        { label: "Twitter", value: opts.projectTwitter },
-        { label: "Description", value: opts.description },
-        { label: "Payment", value: `${paymentAmount} JUP` },
-        {
-          label: "Gasless",
-          value: Output.formatBoolean(craftResult.gasless),
-        },
-        {
-          label: "Metadata Update",
-          value: Output.formatBoolean(!!tokenMetadata),
-        },
-        ...this.metadataRows(tokenMetadata),
       ],
     });
   }
