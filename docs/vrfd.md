@@ -12,15 +12,15 @@ Requires: an active key for the `submit` command. See [setup](setup.md).
 jup vrfd check --token <mint-address>
 ```
 
-- `--token` (required): token mint address to check
+- `--token` (required) — token mint address to check
 
 ```js
 // Example JSON response:
 {
-  "tokenExists": true,
-  "isVerified": false,
-  "canVerify": true,
-  "canMetadata": true
+  "tokenExists": true, // whether the token mint exists on-chain
+  "isVerified": false, // whether the token is already verified
+  "canVerify": true, // whether verification can be submitted
+  "canMetadata": true // whether token metadata can be updated
 }
 ```
 
@@ -35,26 +35,26 @@ jup vrfd submit --token <mint> --project-twitter @projecthandle --description "N
 jup vrfd submit --token <mint> --project-twitter @projecthandle --description "Payment token" --dry-run
 ```
 
-- `--token` (required): token mint address to verify
-- `--project-twitter` (required): project's Twitter/X handle or URL
-- `--description` (required): reason for verification request
-- `--sender-twitter`: submitter's Twitter/X handle (optional)
-- `--meta-*`: inline token metadata fields (optional, see [metadata options](#metadata-options) below)
-- `--key`: key to use for signing (overrides active key)
+- `--token` (required) — token mint address to verify
+- `--project-twitter` (required) — project's Twitter/X handle or URL
+- `--description` (required) — reason for verification request
+- `--sender-twitter` sets the submitter's Twitter/X handle
+- `--key` overrides the active key for this transaction
 - `--dry-run` previews the payment transaction without signing. JSON response includes the unsigned base64 `transaction`.
+- Inline metadata options are listed under [metadata options](#metadata-options) below
 
 ```js
 // Example JSON response:
 {
-  "sender": "ABC1...xyz",
-  "tokenId": "So11111111111111111111111111111111111111112",
-  "status": "Success",
-  "signature": "2Goj...diEc",
-  "paymentAmount": "1",
-  "paymentMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
-  "feeUsd": 0.85,
-  "verificationCreated": true,
-  "metadataCreated": false
+  "sender": "ABC1...xyz", // sender wallet address
+  "tokenId": "So11111111111111111111111111111111111111112", // token mint address
+  "status": "Success", // "Success" or "Failed"
+  "signature": "2Goj...diEc", // tx signature
+  "paymentAmount": "1", // JUP amount paid for verification
+  "paymentMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // payment token mint
+  "feeUsd": 0.85, // USD value of fee
+  "verificationCreated": true, // whether verification request was created
+  "metadataCreated": false // whether metadata was updated
 }
 ```
 
