@@ -59,7 +59,7 @@ jup predictions positions
 
 # Check if a token is eligible for verification
 jup vrfd check --token <mint-address>
-# Submit a token verification request (costs 1 JUP)
+# Submit a token verification request (costs 1000 JUP)
 jup vrfd submit --token <mint> --twitter @projecthandle --description "DeFi protocol on Solana"
 ```
 
