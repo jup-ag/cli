@@ -1,6 +1,5 @@
 import ky from "ky";
 
-
 export type CheckEligibilityResponse = {
   tokenExists: boolean;
   isVerified: boolean;
@@ -90,13 +89,13 @@ export class VrfdClient {
     senderAddress: string
   ): Promise<CraftTxnResponse> {
     return this.#ky
-      .get("payments/express/craft-txn", {
+      .get("express/craft-txn", {
         searchParams: { senderAddress },
       })
       .json();
   }
 
   public static async execute(req: ExecuteRequest): Promise<ExecuteResponse> {
-    return this.#ky.post("payments/express/execute", { json: req }).json();
+    return this.#ky.post("express/execute", { json: req }).json();
   }
 }
