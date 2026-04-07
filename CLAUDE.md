@@ -24,7 +24,7 @@ bun run ci
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 7 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 8 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
