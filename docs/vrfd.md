@@ -91,11 +91,9 @@ Pass token metadata inline with `--meta-` prefixed options. All are optional.
 
 ## Workflows
 
-### Check eligibility then submit
+### Submit for verification
 
 ```bash
-jup vrfd check --token <mint>
-# Confirm canVerify is true
 jup vrfd submit --token <mint> --project-twitter @project --description "My token"
 ```
 
@@ -114,3 +112,11 @@ jup vrfd submit --token <mint> --project-twitter @project --description "My toke
 # Review the details, then run without --dry-run
 jup vrfd submit --token <mint> --project-twitter @project --description "My token"
 ```
+
+### Check eligibility (optional)
+
+```bash
+jup vrfd check --token <mint>
+```
+
+Use `check` to inspect eligibility details without submitting — `submit` already validates eligibility automatically.
