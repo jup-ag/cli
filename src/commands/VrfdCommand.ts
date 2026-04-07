@@ -29,7 +29,10 @@ export class VrfdCommand {
         "Project Twitter/X handle or URL"
       )
       .requiredOption("--description <text>", "Reason for verification request")
-      .option("--sender-twitter <handle>", "Submitter's Twitter/X handle")
+      .option(
+        "--sender-twitter <handle>",
+        "Submitter's Twitter/X handle or URL"
+      )
       .option("--meta-icon <url>", "Token icon URL")
       .option("--meta-name <name>", "Token name")
       .option("--meta-symbol <symbol>", "Token symbol/ticker")
