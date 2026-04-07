@@ -20,7 +20,9 @@ jup vrfd check --token <mint-address>
   "tokenExists": true, // whether the token mint exists on-chain
   "isVerified": false, // whether the token is already verified
   "canVerify": true, // whether verification can be submitted
-  "canMetadata": true // whether token metadata can be updated
+  "canMetadata": true, // whether token metadata can be updated
+  "verificationError": null, // string if canVerify is false
+  "metadataError": null // string if canMetadata is false
 }
 ```
 
@@ -54,7 +56,8 @@ jup vrfd submit --token <mint> --project-twitter @projecthandle --description "P
   "paymentMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // payment token mint
   "feeUsd": 0.85, // USD value of fee
   "verificationCreated": true, // whether verification request was created
-  "metadataCreated": false // whether metadata was updated
+  "metadataCreated": false, // whether metadata was updated
+  "metadata": null // token metadata object if --meta-* options were provided
 }
 ```
 
