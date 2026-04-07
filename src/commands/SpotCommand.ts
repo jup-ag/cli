@@ -331,7 +331,7 @@ export class SpotCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
     const SOL_DECIMALS = Asset.SOL.decimals;
 
@@ -616,7 +616,7 @@ export class SpotCommand {
 
     const address =
       opts.address ??
-      await Signer.loadAddress(opts.key ?? Config.load().activeKey);
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
     const targetAsset = opts.token
       ? await DatapiClient.resolveToken(opts.token)
       : undefined;

@@ -45,10 +45,7 @@ export class KeysCommand {
         "--private-key <key>",
         "Import from private key (hex, base58, base64, or JSON byte array)"
       )
-      .option(
-        "--backend <type>",
-        `Keychain backend (${this.VALID_BACKENDS})`
-      )
+      .option("--backend <type>", `Keychain backend (${this.VALID_BACKENDS})`)
       .option("--param <key=value...>", "Backend parameters (repeatable)")
       .action((name, opts) => this.add(name, opts));
     keys
@@ -186,11 +183,9 @@ export class KeysCommand {
     const isKeychain = !!opts.backend;
 
     if (isKeychain) {
-      const keypairModes = [
-        opts.file,
-        opts.seedPhrase,
-        opts.privateKey,
-      ].filter(Boolean);
+      const keypairModes = [opts.file, opts.seedPhrase, opts.privateKey].filter(
+        Boolean
+      );
       if (keypairModes.length > 0) {
         throw new Error(
           "--backend is mutually exclusive with --file, --seed-phrase, and --private-key."
@@ -262,10 +257,7 @@ export class KeysCommand {
 
     const params = this.parseParams(opts.param ?? []);
     const def = KeychainConfig.BACKENDS[backend];
-    const knownParams = new Set([
-      ...def.requiredParams,
-      ...def.optionalParams,
-    ]);
+    const knownParams = new Set([...def.requiredParams, ...def.optionalParams]);
 
     for (const required of def.requiredParams) {
       if (!params[required]) {
@@ -343,9 +335,7 @@ export class KeysCommand {
     }
 
     if (isKeychain && (opts.seedPhrase || opts.privateKey)) {
-      throw new Error(
-        "Cannot replace credentials for a keychain-backed key."
-      );
+      throw new Error("Cannot replace credentials for a keychain-backed key.");
     }
 
     if (opts.seedPhrase || opts.privateKey) {

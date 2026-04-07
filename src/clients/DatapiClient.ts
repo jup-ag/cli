@@ -155,9 +155,7 @@ export class DatapiClient {
     return this.#ky.get("_datapi/v1/txs/users", { searchParams }).json();
   }
 
-  public static async getTokensByMints(
-    mints: string[]
-  ): Promise<Token[]> {
+  public static async getTokensByMints(mints: string[]): Promise<Token[]> {
     if (mints.length === 0) {
       return [];
     }

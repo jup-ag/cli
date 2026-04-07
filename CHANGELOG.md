@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.1
+
+### Bug Fixes
+
+- Update `@solana/kit` to fix `keys` issues (bc42d3d)
+
+### Improvements
+
+- Add Prettier formatting scripts and fix formatting (0c81498)
+- Move `requireEnv` and `requireParam` into `KeychainConfig` as private static methods (08877ea)
+
 ## v0.7.0
 
 ### Features
