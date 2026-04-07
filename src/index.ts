@@ -8,6 +8,7 @@ import { PerpsCommand } from "./commands/PerpsCommand.ts";
 import { PredictionsCommand } from "./commands/PredictionsCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
 import { UpdateCommand } from "./commands/UpdateCommand.ts";
+import { VrfdCommand } from "./commands/VrfdCommand.ts";
 
 import { version } from "../package.json";
 import { Config } from "./lib/Config.ts";
@@ -42,6 +43,7 @@ PerpsCommand.register(program);
 PredictionsCommand.register(program);
 SpotCommand.register(program);
 UpdateCommand.register(program);
+VrfdCommand.register(program);
 
 program.parseAsync().catch(async (err: unknown) => {
   await Output.error(err);

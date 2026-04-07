@@ -24,7 +24,7 @@ bun run ci
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 6 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 8 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
@@ -35,6 +35,7 @@ bun run ci
 - `PredictionsCommand` — `predictions events/positions/open/close/history`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
 - `UpdateCommand` — `update` (self-update CLI to latest version)
+- `VrfdCommand` — `vrfd check/submit`
 
 **Libraries** (`src/lib/`):
 
@@ -53,6 +54,7 @@ bun run ci
 - `PerpsClient` — Jupiter Perps API v2 (positions, orders, TP/SL)
 - `LendClient` — Jupiter Lend API (earn tokens, positions, earnings)
 - `PredictionsClient` — Jupiter Predictions API v1 (events, positions, orders, history)
+- `VrfdClient` — Jupiter Token Verification API (eligibility check, payment, execute)
 
 **Spot swap flow:** token search → Swap.execute → UltraClient.getOrder → Signer.signTransaction → UltraClient.postExecute
 
@@ -61,6 +63,8 @@ bun run ci
 **Lend deposit/withdraw flow:** LendClient.getTokens → resolve jlToken → Swap.execute → LendClient.getPositions (updated state)
 
 **Predictions flow:** PredictionsClient.postOrder → Signer.signTransaction → PredictionsClient.postExecute
+
+**Vrfd flow:** VrfdClient.checkEligibility → VrfdClient.craftTxn → Signer.signTransaction → VrfdClient.execute
 
 ## CLI Conventions
 

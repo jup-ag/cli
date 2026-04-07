@@ -1,6 +1,6 @@
 # Jupiter CLI
 
-CLI for interacting with Jupiter's products on Solana: Spot, Perps, Lend, Prediction Markets and more.
+CLI for interacting with Jupiter's products on Solana: Spot, Perps, Lend, Prediction Markets, Token Verification and more.
 
 > [!WARNING]
 > This project is pre-v1 (early alpha) and should be considered unstable. Breaking changes may be introduced without warning. Please reach out to the team if you'd like to use or contribute to the CLI.
@@ -56,6 +56,11 @@ jup predictions events --category crypto
 jup predictions open --market <marketId> --side yes --amount 10
 # View your prediction positions
 jup predictions positions
+
+# Check if a token is eligible for verification
+jup vrfd check --token <mint-address>
+# Submit a token verification request (costs 1000 JUP)
+jup vrfd submit --token <mint-address> --project-twitter @projecthandle --description "DeFi protocol on Solana"
 ```
 
 ## Docs
@@ -75,6 +80,7 @@ jup predictions positions
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
+- [Vrfd](docs/vrfd.md): Token verification
 
 ## Changelog
 
