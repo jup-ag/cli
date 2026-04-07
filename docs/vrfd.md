@@ -1,6 +1,6 @@
 # Token Verification
 
-Submit token verification requests on Jupiter. Costs 1 JUP per verification.
+Submit token verification requests on Jupiter. Costs 1000 JUP per verification.
 
 Requires: an active key for the `submit` command. See [setup](setup.md).
 
@@ -50,7 +50,7 @@ jup vrfd submit --token <mint> --project-twitter @projecthandle --description "P
   "tokenId": "So11111111111111111111111111111111111111112", // token mint address
   "status": "Success", // "Success" or "Failed"
   "signature": "2Goj...diEc", // tx signature
-  "paymentAmount": "1", // JUP amount paid for verification
+  "paymentAmount": "1000", // JUP amount paid for verification
   "paymentMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", // payment token mint
   "feeUsd": 0.85, // USD value of fee
   "verificationCreated": true, // whether verification request was created

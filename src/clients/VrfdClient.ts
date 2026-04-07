@@ -1,5 +1,7 @@
 import ky from "ky";
 
+import { ClientConfig } from "./ClientConfig.ts";
+
 export type CheckEligibilityResponse = {
   tokenExists: boolean;
   isVerified: boolean;
@@ -22,7 +24,7 @@ export type CraftTxnResponse = {
   feeAmount: number;
   transaction?: string;
   requestId: string;
-  totalTime: string;
+  totalTime: number;
   expireAt?: string;
   error?: string;
   code: number;
@@ -74,14 +76,17 @@ export type ExecuteResponse = {
 
 export class VrfdClient {
   static readonly #ky = ky.create({
-    prefixUrl: "https://token-verification-dev-api.jup.ag",
+    prefixUrl: ClientConfig.host,
+    headers: ClientConfig.headers,
   });
 
   public static async checkEligibility(
     tokenId: string
   ): Promise<CheckEligibilityResponse> {
     return this.#ky
-      .get("express/check-eligibility", { searchParams: { tokenId } })
+      .get("tokens/v2/verify/express/check-eligibility", {
+        searchParams: { tokenId },
+      })
       .json();
   }
 
@@ -89,13 +94,15 @@ export class VrfdClient {
     senderAddress: string
   ): Promise<CraftTxnResponse> {
     return this.#ky
-      .get("express/craft-txn", {
+      .get("tokens/v2/verify/express/craft-txn", {
         searchParams: { senderAddress },
       })
       .json();
   }
 
   public static async execute(req: ExecuteRequest): Promise<ExecuteResponse> {
-    return this.#ky.post("express/execute", { json: req }).json();
+    return this.#ky
+      .post("tokens/v2/verify/express/execute", { json: req })
+      .json();
   }
 }
