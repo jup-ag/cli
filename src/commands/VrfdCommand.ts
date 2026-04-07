@@ -2,7 +2,11 @@ import { isAddress, type Base64EncodedBytes } from "@solana/kit";
 
 import type { Command } from "commander";
 
-import { VrfdClient, type TokenMetadata } from "../clients/VrfdClient.ts";
+import {
+  VrfdClient,
+  type ExecuteResponse,
+  type TokenMetadata,
+} from "../clients/VrfdClient.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
@@ -100,6 +104,20 @@ export class VrfdCommand {
     });
   }
 
+  private static async signAndExecute(
+    signer: Signer,
+    transaction: string,
+    req: Omit<Parameters<typeof VrfdClient.execute>[0], "transaction">
+  ): Promise<ExecuteResponse | null> {
+    if (Config.dryRun) {
+      return null;
+    }
+    const signedTx = await signer.signTransaction(
+      transaction as Base64EncodedBytes
+    );
+    return VrfdClient.execute({ ...req, transaction: signedTx });
+  }
+
   private static async submit(opts: {
     token: string;
     projectTwitter: string;
@@ -172,55 +190,7 @@ export class VrfdCommand {
       craftResult.tokenDecimals
     );
 
-    if (Config.dryRun) {
-      if (Output.isJson()) {
-        Output.json({
-          dryRun: true,
-          sender: signer.address,
-          tokenId: opts.token,
-          status: null,
-          signature: null,
-          paymentAmount,
-          paymentMint: craftResult.mint,
-          feeUsd: craftResult.feeUsdAmount ?? null,
-          verificationCreated: null,
-          metadataCreated: null,
-          metadata: tokenMetadata ?? null,
-          transaction: craftResult.transaction,
-        });
-        return;
-      }
-
-      console.log(Output.DRY_RUN_LABEL);
-      Output.table({
-        type: "vertical",
-        rows: [
-          { label: "Sender", value: signer.address },
-          { label: "Token", value: opts.token },
-          { label: "Twitter", value: opts.projectTwitter },
-          { label: "Description", value: opts.description },
-          { label: "Payment", value: `${paymentAmount} JUP` },
-          {
-            label: "Gasless",
-            value: Output.formatBoolean(craftResult.gasless),
-          },
-          {
-            label: "Metadata Update",
-            value: Output.formatBoolean(!!tokenMetadata),
-          },
-          ...this.metadataRows(tokenMetadata),
-        ],
-      });
-      return;
-    }
-
-    // Sign and execute
-    const signedTx = await signer.signTransaction(
-      craftResult.transaction as Base64EncodedBytes
-    );
-
-    const result = await VrfdClient.execute({
-      transaction: signedTx,
+    const result = await this.signAndExecute(signer, craftResult.transaction, {
       requestId: craftResult.requestId,
       senderAddress: signer.address,
       tokenId: opts.token,
@@ -230,42 +200,61 @@ export class VrfdCommand {
       tokenMetadata,
     });
 
-    if (result.status === "Failed") {
+    if (result?.status === "Failed") {
       throw new Error(result.error ?? "Verification submission failed.");
     }
 
     if (Output.isJson()) {
       Output.json({
+        ...(Config.dryRun && { dryRun: true }),
         sender: signer.address,
         tokenId: opts.token,
-        status: result.status,
-        signature: result.signature ?? null,
+        status: result?.status ?? null,
+        signature: result?.signature ?? null,
         paymentAmount,
         paymentMint: craftResult.mint,
         feeUsd: craftResult.feeUsdAmount ?? null,
-        verificationCreated: result.verificationCreated,
-        metadataCreated: result.metadataCreated,
+        verificationCreated: result?.verificationCreated ?? null,
+        metadataCreated: result?.metadataCreated ?? null,
         metadata: tokenMetadata ?? null,
+        ...(Config.dryRun && { transaction: craftResult.transaction }),
       });
       return;
     }
 
+    if (Config.dryRun) {
+      console.log(Output.DRY_RUN_LABEL);
+    }
     Output.table({
       type: "vertical",
       rows: [
-        { label: "Status", value: result.status },
+        { label: "Sender", value: signer.address },
         { label: "Token", value: opts.token },
+        { label: "Twitter", value: opts.projectTwitter },
+        { label: "Description", value: opts.description },
         { label: "Payment", value: `${paymentAmount} JUP` },
         {
+          label: "Fee",
+          value: Output.formatDollar(craftResult.feeUsdAmount ?? 0),
+        },
+        {
+          label: "Gasless",
+          value: Output.formatBoolean(craftResult.gasless),
+        },
+        {
           label: "Verification Created",
-          value: Output.formatBoolean(result.verificationCreated),
+          value: result
+            ? Output.formatBoolean(result.verificationCreated)
+            : "\u2014",
         },
         {
           label: "Metadata Created",
-          value: Output.formatBoolean(result.metadataCreated),
+          value: result
+            ? Output.formatBoolean(result.metadataCreated)
+            : "\u2014",
         },
         ...this.metadataRows(tokenMetadata),
-        ...(result.signature
+        ...(!Config.dryRun && result?.signature
           ? [{ label: "Tx Signature", value: result.signature }]
           : []),
       ],
