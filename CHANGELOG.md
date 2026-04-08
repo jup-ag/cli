@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.0
+
+### Features
+
+- Add `vrfd check` and `vrfd submit` commands for Jupiter token verification (#15)
+
 ## v0.7.1
 
 ### Bug Fixes
