@@ -121,7 +121,7 @@ export class PredictionsCommand {
       const limit = Number(opts.limit);
       const end = start + limit;
 
-      const sortBy = opts.sort === "recent" ? "beginAt" : "volume24hr";
+      const sortBy = opts.sort === "recent" ? "beginAt" : "volume";
       const sortDirection = opts.sort === "recent" ? "desc" : undefined;
 
       const res = await PredictionsClient.getEvents({
@@ -151,7 +151,7 @@ export class PredictionsCommand {
         : null,
       markets: (e.markets ?? []).map((m) => ({
         marketId: m.marketId,
-        title: m.metadata.title,
+        title: m.title,
         status: m.status,
         yesPriceUsd: m.pricing.buyYesPriceUsd
           ? NumberConverter.fromMicroUsd(m.pricing.buyYesPriceUsd)
