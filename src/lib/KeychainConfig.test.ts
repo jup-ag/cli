@@ -22,13 +22,14 @@ afterEach(() => {
 });
 
 const SAMPLE_CONFIG: KeychainConfigData = {
-  backend: "vault",
-  address: "11111111111111111111111111111111",
-  params: {
+  signerConfig: {
+    backend: "vault",
     vaultAddr: "https://vault.example.com",
+    vaultToken: "hvs.test",
     keyName: "solana-key",
     publicKey: "11111111111111111111111111111111",
   },
+  resolvedAddress: "11111111111111111111111111111111",
 };
 
 describe("config round-trip", () => {
@@ -65,41 +66,5 @@ describe("load", () => {
     expect(() => KeychainConfig.load("missing")).toThrow(
       'Keychain config "missing" does not exist.'
     );
-  });
-});
-
-describe("createSigner", () => {
-  test("throws for unknown backend", async () => {
-    const config = {
-      backend: "nonexistent" as any,
-      address: "",
-      params: {},
-    };
-    expect(KeychainConfig.createSigner(config)).rejects.toThrow(
-      'Unknown keychain backend: "nonexistent"'
-    );
-  });
-
-  test("throws when required env var is missing", async () => {
-    const saved = process.env.VAULT_TOKEN;
-    delete process.env.VAULT_TOKEN;
-    try {
-      const config: KeychainConfigData = {
-        backend: "vault",
-        address: "",
-        params: {
-          vaultAddr: "https://vault.example.com",
-          keyName: "test",
-          publicKey: "11111111111111111111111111111111",
-        },
-      };
-      expect(KeychainConfig.createSigner(config)).rejects.toThrow(
-        "Missing required environment variable: VAULT_TOKEN"
-      );
-    } finally {
-      if (saved) {
-        process.env.VAULT_TOKEN = saved;
-      }
-    }
   });
 });

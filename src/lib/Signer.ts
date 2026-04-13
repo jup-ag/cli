@@ -12,6 +12,8 @@ import {
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { createKeychainSigner } from "@solana/keychain";
+
 import { Config } from "./Config.ts";
 import { KeychainConfig } from "./KeychainConfig.ts";
 import { KeyPair } from "./KeyPair.ts";
@@ -56,7 +58,7 @@ export class Signer {
   public static async load(name: string): Promise<Signer> {
     if (KeychainConfig.isKeychainKey(name)) {
       const config = KeychainConfig.load(name);
-      const signer = await KeychainConfig.createSigner(config);
+      const signer = await createKeychainSigner(config.signerConfig);
       return new Signer(signer, null);
     }
 
@@ -70,7 +72,7 @@ export class Signer {
 
   public static async loadAddress(name: string): Promise<string> {
     if (KeychainConfig.isKeychainKey(name)) {
-      return KeychainConfig.load(name).address;
+      return KeychainConfig.load(name).resolvedAddress;
     }
     return (await this.load(name)).address;
   }

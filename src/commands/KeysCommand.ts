@@ -10,19 +10,23 @@ import {
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import {
+  type BackendName,
+  type KeychainSignerConfig,
+  resolveAddress,
+} from "@solana/keychain";
+
 import { Config } from "../lib/Config.ts";
 import {
+  BACKEND_NAMES,
   KeychainConfig,
-  type KeychainBackend,
   type KeychainConfigData,
 } from "../lib/KeychainConfig.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 
 export class KeysCommand {
-  private static readonly VALID_BACKENDS = Object.keys(
-    KeychainConfig.BACKENDS
-  ).join(", ");
+  private static readonly VALID_BACKENDS = BACKEND_NAMES.join(", ");
 
   public static register(program: Command): void {
     const keys = program.command("keys").description("Private key management");
@@ -140,8 +144,8 @@ export class KeysCommand {
       const config = KeychainConfig.load(name);
       return {
         name,
-        address: config.address,
-        type: config.backend,
+        address: config.resolvedAddress,
+        type: config.signerConfig.backend,
         active: settings.activeKey === name,
       };
     });
@@ -242,8 +246,8 @@ export class KeysCommand {
       overwrite?: boolean;
     }
   ): Promise<void> {
-    const backend = opts.backend as KeychainBackend;
-    if (!(backend in KeychainConfig.BACKENDS)) {
+    const backend = opts.backend as BackendName;
+    if (!BACKEND_NAMES.includes(backend)) {
       throw new Error(
         `Unknown backend "${opts.backend}". Valid backends: ${this.VALID_BACKENDS}`
       );
@@ -256,39 +260,14 @@ export class KeysCommand {
     }
 
     const params = this.parseParams(opts.param ?? []);
-    const def = KeychainConfig.BACKENDS[backend];
-    const knownParams = new Set([...def.requiredParams, ...def.optionalParams]);
+    const signerConfig = { backend, ...params } as KeychainSignerConfig;
 
-    for (const required of def.requiredParams) {
-      if (!params[required]) {
-        throw new Error(
-          `Missing required parameter "${required}" for ${backend}. ` +
-            `Required: ${def.requiredParams.join(", ")}` +
-            (def.optionalParams.length > 0
-              ? `. Optional: ${def.optionalParams.join(", ")}`
-              : "")
-        );
-      }
-    }
-
-    const unknownParams = Object.keys(params).filter(
-      (k) => !knownParams.has(k)
-    );
-    if (unknownParams.length > 0) {
-      throw new Error(
-        `Unknown parameter(s) for ${backend}: ${unknownParams.join(", ")}. ` +
-          `Valid: ${[...knownParams].join(", ")}`
-      );
-    }
+    const address = await resolveAddress(signerConfig);
 
     const config: KeychainConfigData = {
-      backend,
-      address: "",
-      params,
+      signerConfig,
+      resolvedAddress: address as string,
     };
-
-    const signer = await KeychainConfig.createSigner(config);
-    config.address = signer.address;
 
     if (opts.overwrite) {
       this.removeKey(name);
