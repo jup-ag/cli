@@ -47,6 +47,7 @@ export type PredictionEvent = {
   metadata: EventMetadata;
   markets: Market[];
   volumeUsd: string;
+  volume24hr: "string";
   closeCondition: string;
   beginAt: string | null;
   rulesPdf: string;

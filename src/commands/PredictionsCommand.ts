@@ -25,7 +25,11 @@ export class PredictionsCommand {
       .option("--id <eventId>", "Look up a single event by ID")
       .option("--search <query>", "Search events by title")
       .option("--filter <filter>", "Filter: new, live, trending")
-      .option("--sort <sort>", "Sort by: volume, recent", "volume")
+      .option(
+        "--sort <sort>",
+        "Sort by: volume, volume24h, recent",
+        "volume24h"
+      )
       .option(
         "--category <category>",
         "Category: all, crypto, sports, politics, esports, culture, economics, tech",
@@ -121,8 +125,7 @@ export class PredictionsCommand {
       const limit = Number(opts.limit);
       const end = start + limit;
 
-      const sortBy = opts.sort === "recent" ? "beginAt" : "volume";
-      const sortDirection = opts.sort === "recent" ? "desc" : undefined;
+      const { sortBy, sortDirection } = this.normalizeEventSort(opts.sort);
 
       const res = await PredictionsClient.getEvents({
         filter: opts.filter,
@@ -143,6 +146,7 @@ export class PredictionsCommand {
       category: e.category,
       isLive: e.isLive,
       volumeUsd: NumberConverter.fromMicroUsd(e.volumeUsd),
+      volume24hUsd: NumberConverter.fromMicroUsd(e.volume24hr),
       startsAt: e.beginAt
         ? new Date(Number(e.beginAt) * 1000).toISOString()
         : null,
@@ -182,7 +186,8 @@ export class PredictionsCommand {
       const endsAt = event.endsAt ? this.formatDate(event.endsAt) : "???";
       const dateRange = ` (${startsAt} — ${endsAt})`;
       console.log(chalk.bold(event.title) + chalk.gray(dateRange));
-      console.log(`Vol: ${Output.formatDollar(event.volumeUsd)}`);
+      console.log(`Daily Vol: ${Output.formatDollar(event.volume24hUsd)}`);
+      console.log(`Total Vol: ${Output.formatDollar(event.volumeUsd)}`);
 
       if (event.markets.length > 0) {
         Output.table({
@@ -207,6 +212,24 @@ export class PredictionsCommand {
 
     if (hasNext) {
       console.log("Next offset:", nextOffset);
+    }
+  }
+
+  private static normalizeEventSort(sort: string): {
+    sortBy: string;
+    sortDirection?: string;
+  } {
+    switch (sort) {
+      case "volume":
+        return { sortBy: "volume" };
+      case "volume24h":
+        return { sortBy: "volume24hr" };
+      case "recent":
+        return { sortBy: "beginAt", sortDirection: "desc" };
+      default:
+        throw new Error(
+          "Invalid --sort. Must be one of: volume, volume24h, recent."
+        );
     }
   }
 

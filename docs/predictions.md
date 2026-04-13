@@ -32,6 +32,7 @@ jup predictions events --limit 5 --offset 10
       "category": "crypto",
       "isLive": true,
       "volumeUsd": 125000.50,
+      "volume24hUsd": 123.32,
       "startsAt": "2026-01-01T00:00:00.000Z",
       "endsAt": "2026-12-31T23:59:59.000Z",
       "markets": [
