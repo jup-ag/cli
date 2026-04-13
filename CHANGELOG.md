@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.8.1
+
+### Bug Fixes
+
+- Update `predictions` market metadata handling for API changes (90d9ff7)
+- Fix `predictions events --sort` handling (60f1f81)
+
 ## v0.8.0
 
 ### Features
