@@ -8,6 +8,7 @@ type HorizontalTable = {
   type: "horizontal";
   headers: Record<string, string>;
   rows: Record<string, unknown>[];
+  maxWidths?: Record<string, number>;
 };
 
 type VerticalTable = {
@@ -59,7 +60,13 @@ export class Output {
 
       const keys = Object.keys(opts.headers);
       const head = keys.map((k) => chalk.bold(opts.headers[k]!));
-      const table = new Table({ head, style: { head: [] } });
+      const table = new Table({
+        head,
+        style: { head: [] },
+        colWidths: keys.map((k) => opts.maxWidths?.[k] ?? null),
+        wordWrap: true,
+        wrapOnWordBoundary: true,
+      });
 
       for (const row of opts.rows) {
         table.push(keys.map((k) => String(row[k] ?? "")));

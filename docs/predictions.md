@@ -17,7 +17,7 @@ jup predictions events --limit 5 --offset 10
 ```
 
 - `--filter`: `new`, `live`, `trending`
-- `--sort`: `volume` (default), `recent`
+- `--sort`: `volume`, `volume24h` (default), `recent`
 - `--category`: `all` (default), `crypto`, `sports`, `politics`, `esports`, `culture`, `economics`, `tech`
 - `--id` cannot be combined with `--search`, `--filter`, `--sort`, `--category`, or `--offset`
 - `--search` cannot be combined with `--filter`, `--sort`, `--category`, or `--offset`
@@ -40,6 +40,8 @@ jup predictions events --limit 5 --offset 10
           "marketId": "mkt456",
           "title": "Yes / No",
           "status": "open",
+          "rulesPrimary": "Resolves to Yes if BTC trades at or above $200,000 before 2027-01-01 UTC.",
+          "rulesSecondary": "Resolution uses the exchange and settlement source named in the market rules.",
           "yesPriceUsd": 0.65, // 65% implied probability
           "noPriceUsd": 0.35,
           "result": null // "yes" or "no" when resolved

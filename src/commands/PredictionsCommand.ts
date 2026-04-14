@@ -90,7 +90,7 @@ export class PredictionsCommand {
   }): Promise<void> {
     const hasListingOpts =
       opts.filter ||
-      opts.sort !== "volume" ||
+      opts.sort !== "volume24h" ||
       opts.category !== "all" ||
       opts.offset !== "0";
     if (opts.id && (opts.search || hasListingOpts)) {
@@ -157,6 +157,8 @@ export class PredictionsCommand {
         marketId: m.marketId,
         title: m.title,
         status: m.status,
+        rulesPrimary: m.rulesPrimary,
+        rulesSecondary: m.rulesSecondary,
         yesPriceUsd: m.pricing.buyYesPriceUsd
           ? NumberConverter.fromMicroUsd(m.pricing.buyYesPriceUsd)
           : null,
@@ -194,12 +196,19 @@ export class PredictionsCommand {
           type: "horizontal",
           headers: {
             title: "Market",
+            rules: "Rules",
             yes: "Yes",
             no: "No",
             marketId: "Market ID",
           },
+          maxWidths: {
+            rules: 60,
+          },
           rows: event.markets.map((m) => ({
             title: m.title,
+            rules:
+              m.rulesPrimary +
+              (m.rulesSecondary ? "\n\n" + chalk.gray(m.rulesSecondary) : ""),
             yes: this.formatPricePct(m.yesPriceUsd),
             no: this.formatPricePct(m.noPriceUsd),
             marketId: m.marketId,
