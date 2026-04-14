@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.0
+
+### Features
+
+- Add `sign` command for signing `--dry-run` txs (#16)
+
+### Improvements
+
+- Show market rules in `predictions events` output (4bad927)
+
 ## v0.8.1
 
 ### Bug Fixes
