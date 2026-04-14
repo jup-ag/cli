@@ -31,6 +31,9 @@ jup keys add key1 --seed-phrase "word1 word2 ..." --derivation-path "m/44'/501'/
 # Or import from a private key (accepts hex, base58, base64, or JSON byte array)
 jup keys add key1 --private-key <key>
 
+# Sign a base64 transaction returned from --dry-run
+jup sign --tx <base64-transaction>
+
 # View your spot portfolio
 jup spot portfolio
 # Swap 1 SOL to USDC
@@ -68,7 +71,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 > [!NOTE]
 > This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses: `jup config set --output json`, or use `-f json` flag on individual commands.
 >
-> Use `--dry-run` on any transacting command to preview the result without signing or submitting on-chain. In JSON mode, the response includes the unsigned base64 `transaction` for external signing.
+> Use `--dry-run` on any transacting command to preview the result without signing or submitting on-chain. In JSON mode, the response includes the unsigned base64 `transaction`, which can be signed with the `sign` command.
 
 [Read the docs](./docs/) for specific guides, examples, and workflows:
 
@@ -76,6 +79,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 - [Update](docs/update.md): Self-update the CLI
 - [Config](docs/config.md): CLI settings and configurations
 - [Keys](docs/keys.md): Private key management
+- [Sign](docs/sign.md): Sign transactions from `--dry-run`
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending and yield farming
