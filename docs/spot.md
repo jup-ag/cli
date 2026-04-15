@@ -45,7 +45,7 @@ jup spot quote --from <mint> --to <mint> --raw-amount 1000000000
   "outAmount": "84.994059", // human-readable decimal amount
   "inUsdValue": 84.98, // USD value
   "outUsdValue": 84.99,
-  "priceImpact": 0.005 // max value of 1; 0.005 means 0.5%
+  "priceImpact": 0.005 // max value of 100; 0.005 means 0.005%
 }
 ```
 
@@ -73,7 +73,7 @@ jup spot swap --from SOL --to USDC --amount 1 --dry-run
   "outAmount": "84.95", // human-readable decimal amount
   "inUsdValue": 84.98,
   "outUsdValue": 84.95,
-  "priceImpact": 0.005, // max value of 1; 0.005 means 0.5%
+  "priceImpact": 0.005, // max value of 100; 0.005 means 0.005%
   "networkFeeLamports": 5000 // divide by 10^9 for SOL fee
 }
 ```
