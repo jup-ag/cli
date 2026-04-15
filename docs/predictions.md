@@ -80,6 +80,8 @@ jup predictions positions --position <pubkey>
       "valueUsd": 7.20,
       "pnlUsd": 0.70,
       "pnlPct": 10.77, // percentage; 10.77 means +10.77%
+      "startsAt": "2026-01-01T00:00:00.000Z",
+      "endsAt": "2026-12-31T23:59:59.000Z",
       "claimable": false // true when market resolved in your favor
     }
   ]

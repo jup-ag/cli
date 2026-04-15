@@ -287,6 +287,8 @@ export class PredictionsCommand {
       valueUsd: NumberConverter.fromMicroUsd(p.valueUsd),
       pnlUsd: NumberConverter.fromMicroUsd(p.pnlUsd),
       pnlPct: p.pnlUsdPercent,
+      startsAt: new Date(p.marketMetadata.openTime * 1000).toISOString(),
+      endsAt: new Date(p.marketMetadata.closeTime * 1000).toISOString(),
       claimable: this.isClaimable(p),
     }));
 
@@ -305,6 +307,7 @@ export class PredictionsCommand {
       headers: {
         event: "Event",
         market: "Market",
+        dates: "Starts / Ends",
         side: "Side",
         costUsd: "Cost",
         valueUsd: "Value",
@@ -312,11 +315,15 @@ export class PredictionsCommand {
         claimable: "Claimable",
         positionPubkey: "Position",
       },
+      maxWidths: {
+        event: 36,
+      },
       rows: positions.map((p) => {
         const sideColor = p.side === "yes" ? chalk.green : chalk.red;
         return {
           event: p.event,
           market: p.market,
+          dates: this.formatDate(p.startsAt) + "\n" + this.formatDate(p.endsAt),
           side: sideColor(p.side),
           costUsd: Output.formatDollar(p.costUsd),
           valueUsd: Output.formatDollar(p.valueUsd),

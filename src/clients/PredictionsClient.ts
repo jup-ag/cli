@@ -84,6 +84,8 @@ export type PredictionPosition = {
     title: string;
     status: string;
     result: "yes" | "no" | null;
+    openTime: number;
+    closeTime: number;
   };
 };
 
