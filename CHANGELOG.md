@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.10.0
+
+### Features
+
+- Add start and end timings for `predictions events` (81fa6e8)
+
+### Improvements
+
+- Fix price impact explanation in docs (b3e71a8)
+
 ## v0.9.0
 
 ### Features
