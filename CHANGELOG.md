@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.10.0
+
+### Features
+
+- Add start and end timings for `predictions events` (81fa6e8)
+
+### Improvements
+
+- Fix price impact explanation in docs (b3e71a8)
+
+## v0.9.0
+
+### Features
+
+- Add `sign` command for signing `--dry-run` txs (#16)
+
+### Improvements
+
+- Show market rules in `predictions events` output (4bad927)
+
+## v0.8.1
+
+### Bug Fixes
+
+- Update `predictions` market metadata handling for API changes (90d9ff7)
+- Fix `predictions events --sort` handling (60f1f81)
+
 ## v0.8.0
 
 ### Features

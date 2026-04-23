@@ -24,7 +24,7 @@ bun run ci
 
 ## Architecture
 
-**Entry point:** `src/index.ts` — initializes config, registers 8 command groups with Commander.
+**Entry point:** `src/index.ts` — initializes config, registers 9 command groups with Commander.
 
 **Commands** (`src/commands/`): Static classes that register subcommands. Each delegates to library modules.
 
@@ -33,6 +33,7 @@ bun run ci
 - `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
 - `PredictionsCommand` — `predictions events/positions/open/close/history`
+- `SignCommand` — `sign --tx <base64>`
 - `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
 - `UpdateCommand` — `update` (self-update CLI to latest version)
 - `VrfdCommand` — `vrfd check/submit`

@@ -21,28 +21,19 @@ export type MarketPricing = {
   volume: number;
 };
 
-export type MarketMetadata = {
-  marketId: string;
-  title: string;
-  status: string;
-  result: string;
-  closeTime: number;
-  openTime: number;
-  isTeamMarket: boolean;
-  rulesPrimary: string;
-  rulesSecondary: string;
-};
-
 export type Market = {
   marketId: string;
+  title: string;
   status: "open" | "closed" | "cancelled";
   result: "yes" | "no" | null;
   openTime: number;
   closeTime: number;
+  isTeamMarket: boolean;
+  rulesPrimary: string;
+  rulesSecondary: string;
   resolveAt: number | null;
   marketResultPubkey: string | null;
   imageUrl: string | null;
-  metadata: MarketMetadata;
   pricing: MarketPricing;
 };
 
@@ -56,6 +47,7 @@ export type PredictionEvent = {
   metadata: EventMetadata;
   markets: Market[];
   volumeUsd: string;
+  volume24hr: "string";
   closeCondition: string;
   beginAt: string | null;
   rulesPdf: string;
@@ -92,6 +84,8 @@ export type PredictionPosition = {
     title: string;
     status: string;
     result: "yes" | "no" | null;
+    openTime: number;
+    closeTime: number;
   };
 };
 

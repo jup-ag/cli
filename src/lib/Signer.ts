@@ -6,7 +6,6 @@ import {
   partiallySignTransactionWithSigners,
   type Base64EncodedBytes,
   type Base64EncodedWireTransaction,
-  type KeyPairSigner,
   type TransactionPartialSigner,
 } from "@solana/kit";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";

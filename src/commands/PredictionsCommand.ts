@@ -25,7 +25,11 @@ export class PredictionsCommand {
       .option("--id <eventId>", "Look up a single event by ID")
       .option("--search <query>", "Search events by title")
       .option("--filter <filter>", "Filter: new, live, trending")
-      .option("--sort <sort>", "Sort by: volume, recent", "volume")
+      .option(
+        "--sort <sort>",
+        "Sort by: volume, volume24h, recent",
+        "volume24h"
+      )
       .option(
         "--category <category>",
         "Category: all, crypto, sports, politics, esports, culture, economics, tech",
@@ -86,7 +90,7 @@ export class PredictionsCommand {
   }): Promise<void> {
     const hasListingOpts =
       opts.filter ||
-      opts.sort !== "volume" ||
+      opts.sort !== "volume24h" ||
       opts.category !== "all" ||
       opts.offset !== "0";
     if (opts.id && (opts.search || hasListingOpts)) {
@@ -121,8 +125,7 @@ export class PredictionsCommand {
       const limit = Number(opts.limit);
       const end = start + limit;
 
-      const sortBy = opts.sort === "recent" ? "beginAt" : "volume24hr";
-      const sortDirection = opts.sort === "recent" ? "desc" : undefined;
+      const { sortBy, sortDirection } = this.normalizeEventSort(opts.sort);
 
       const res = await PredictionsClient.getEvents({
         filter: opts.filter,
@@ -143,6 +146,7 @@ export class PredictionsCommand {
       category: e.category,
       isLive: e.isLive,
       volumeUsd: NumberConverter.fromMicroUsd(e.volumeUsd),
+      volume24hUsd: NumberConverter.fromMicroUsd(e.volume24hr),
       startsAt: e.beginAt
         ? new Date(Number(e.beginAt) * 1000).toISOString()
         : null,
@@ -151,8 +155,10 @@ export class PredictionsCommand {
         : null,
       markets: (e.markets ?? []).map((m) => ({
         marketId: m.marketId,
-        title: m.metadata.title,
+        title: m.title,
         status: m.status,
+        rulesPrimary: m.rulesPrimary,
+        rulesSecondary: m.rulesSecondary,
         yesPriceUsd: m.pricing.buyYesPriceUsd
           ? NumberConverter.fromMicroUsd(m.pricing.buyYesPriceUsd)
           : null,
@@ -182,19 +188,27 @@ export class PredictionsCommand {
       const endsAt = event.endsAt ? this.formatDate(event.endsAt) : "???";
       const dateRange = ` (${startsAt} — ${endsAt})`;
       console.log(chalk.bold(event.title) + chalk.gray(dateRange));
-      console.log(`Vol: ${Output.formatDollar(event.volumeUsd)}`);
+      console.log(`Daily Vol: ${Output.formatDollar(event.volume24hUsd)}`);
+      console.log(`Total Vol: ${Output.formatDollar(event.volumeUsd)}`);
 
       if (event.markets.length > 0) {
         Output.table({
           type: "horizontal",
           headers: {
             title: "Market",
+            rules: "Rules",
             yes: "Yes",
             no: "No",
             marketId: "Market ID",
           },
+          maxWidths: {
+            rules: 60,
+          },
           rows: event.markets.map((m) => ({
             title: m.title,
+            rules:
+              m.rulesPrimary +
+              (m.rulesSecondary ? "\n\n" + chalk.gray(m.rulesSecondary) : ""),
             yes: this.formatPricePct(m.yesPriceUsd),
             no: this.formatPricePct(m.noPriceUsd),
             marketId: m.marketId,
@@ -207,6 +221,24 @@ export class PredictionsCommand {
 
     if (hasNext) {
       console.log("Next offset:", nextOffset);
+    }
+  }
+
+  private static normalizeEventSort(sort: string): {
+    sortBy: string;
+    sortDirection?: string;
+  } {
+    switch (sort) {
+      case "volume":
+        return { sortBy: "volume" };
+      case "volume24h":
+        return { sortBy: "volume24hr" };
+      case "recent":
+        return { sortBy: "beginAt", sortDirection: "desc" };
+      default:
+        throw new Error(
+          "Invalid --sort. Must be one of: volume, volume24h, recent."
+        );
     }
   }
 
@@ -255,6 +287,8 @@ export class PredictionsCommand {
       valueUsd: NumberConverter.fromMicroUsd(p.valueUsd),
       pnlUsd: NumberConverter.fromMicroUsd(p.pnlUsd),
       pnlPct: p.pnlUsdPercent,
+      startsAt: new Date(p.marketMetadata.openTime * 1000).toISOString(),
+      endsAt: new Date(p.marketMetadata.closeTime * 1000).toISOString(),
       claimable: this.isClaimable(p),
     }));
 
@@ -273,6 +307,7 @@ export class PredictionsCommand {
       headers: {
         event: "Event",
         market: "Market",
+        dates: "Starts / Ends",
         side: "Side",
         costUsd: "Cost",
         valueUsd: "Value",
@@ -280,11 +315,15 @@ export class PredictionsCommand {
         claimable: "Claimable",
         positionPubkey: "Position",
       },
+      maxWidths: {
+        event: 36,
+      },
       rows: positions.map((p) => {
         const sideColor = p.side === "yes" ? chalk.green : chalk.red;
         return {
           event: p.event,
           market: p.market,
+          dates: this.formatDate(p.startsAt) + "\n" + this.formatDate(p.endsAt),
           side: sideColor(p.side),
           costUsd: Output.formatDollar(p.costUsd),
           valueUsd: Output.formatDollar(p.valueUsd),

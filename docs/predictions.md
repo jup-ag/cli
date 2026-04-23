@@ -17,7 +17,7 @@ jup predictions events --limit 5 --offset 10
 ```
 
 - `--filter`: `new`, `live`, `trending`
-- `--sort`: `volume` (default), `recent`
+- `--sort`: `volume`, `volume24h` (default), `recent`
 - `--category`: `all` (default), `crypto`, `sports`, `politics`, `esports`, `culture`, `economics`, `tech`
 - `--id` cannot be combined with `--search`, `--filter`, `--sort`, `--category`, or `--offset`
 - `--search` cannot be combined with `--filter`, `--sort`, `--category`, or `--offset`
@@ -32,6 +32,7 @@ jup predictions events --limit 5 --offset 10
       "category": "crypto",
       "isLive": true,
       "volumeUsd": 125000.50,
+      "volume24hUsd": 123.32,
       "startsAt": "2026-01-01T00:00:00.000Z",
       "endsAt": "2026-12-31T23:59:59.000Z",
       "markets": [
@@ -39,6 +40,8 @@ jup predictions events --limit 5 --offset 10
           "marketId": "mkt456",
           "title": "Yes / No",
           "status": "open",
+          "rulesPrimary": "Resolves to Yes if BTC trades at or above $200,000 before 2027-01-01 UTC.",
+          "rulesSecondary": "Resolution uses the exchange and settlement source named in the market rules.",
           "yesPriceUsd": 0.65, // 65% implied probability
           "noPriceUsd": 0.35,
           "result": null // "yes" or "no" when resolved
@@ -77,6 +80,8 @@ jup predictions positions --position <pubkey>
       "valueUsd": 7.20,
       "pnlUsd": 0.70,
       "pnlPct": 10.77, // percentage; 10.77 means +10.77%
+      "startsAt": "2026-01-01T00:00:00.000Z",
+      "endsAt": "2026-12-31T23:59:59.000Z",
       "claimable": false // true when market resolved in your favor
     }
   ]
