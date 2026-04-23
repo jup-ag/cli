@@ -5,8 +5,9 @@ import { join } from "node:path";
 import { Config } from "./Config.ts";
 
 export type KeychainConfigData = {
-  signerConfig: KeychainSignerConfig;
-  resolvedAddress: string;
+  backend: BackendName;
+  address: string;
+  params: Record<string, string>;
 };
 
 export const BACKEND_NAMES: BackendName[] = [
@@ -41,5 +42,14 @@ export class KeychainConfig {
 
   public static save(name: string, config: KeychainConfigData): void {
     writeFileSync(this.configPath(name), JSON.stringify(config, null, 2));
+  }
+
+  public static toSignerConfig(
+    config: KeychainConfigData
+  ): KeychainSignerConfig {
+    return {
+      backend: config.backend,
+      ...config.params,
+    } as KeychainSignerConfig;
   }
 }

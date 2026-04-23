@@ -57,7 +57,9 @@ export class Signer {
   public static async load(name: string): Promise<Signer> {
     if (KeychainConfig.isKeychainKey(name)) {
       const config = KeychainConfig.load(name);
-      const signer = await createKeychainSigner(config.signerConfig);
+      const signer = await createKeychainSigner(
+        KeychainConfig.toSignerConfig(config)
+      );
       return new Signer(signer, null);
     }
 
@@ -71,7 +73,7 @@ export class Signer {
 
   public static async loadAddress(name: string): Promise<string> {
     if (KeychainConfig.isKeychainKey(name)) {
-      return KeychainConfig.load(name).resolvedAddress;
+      return KeychainConfig.load(name).address;
     }
     return (await this.load(name)).address;
   }

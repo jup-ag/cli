@@ -144,8 +144,8 @@ export class KeysCommand {
       const config = KeychainConfig.load(name);
       return {
         name,
-        address: config.resolvedAddress,
-        type: config.signerConfig.backend,
+        address: config.address,
+        type: config.backend,
         active: settings.activeKey === name,
       };
     });
@@ -265,8 +265,9 @@ export class KeysCommand {
     const address = await resolveAddress(signerConfig);
 
     const config: KeychainConfigData = {
-      signerConfig,
-      resolvedAddress: address as string,
+      backend,
+      address: address as string,
+      params,
     };
 
     if (opts.overwrite) {

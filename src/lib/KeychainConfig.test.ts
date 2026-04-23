@@ -22,14 +22,14 @@ afterEach(() => {
 });
 
 const SAMPLE_CONFIG: KeychainConfigData = {
-  signerConfig: {
-    backend: "vault",
+  backend: "vault",
+  address: "11111111111111111111111111111111",
+  params: {
     vaultAddr: "https://vault.example.com",
     vaultToken: "hvs.test",
     keyName: "solana-key",
     publicKey: "11111111111111111111111111111111",
   },
-  resolvedAddress: "11111111111111111111111111111111",
 };
 
 describe("config round-trip", () => {
@@ -66,5 +66,18 @@ describe("load", () => {
     expect(() => KeychainConfig.load("missing")).toThrow(
       'Keychain config "missing" does not exist.'
     );
+  });
+});
+
+describe("toSignerConfig", () => {
+  test("flattens backend and params", () => {
+    const signerConfig = KeychainConfig.toSignerConfig(SAMPLE_CONFIG);
+    expect(signerConfig).toEqual({
+      backend: "vault",
+      vaultAddr: "https://vault.example.com",
+      vaultToken: "hvs.test",
+      keyName: "solana-key",
+      publicKey: "11111111111111111111111111111111",
+    });
   });
 });
