@@ -32,17 +32,30 @@ export class Config {
     if (!existsSync(this.SETTINGS_FILE)) {
       return { ...DEFAULT_SETTINGS };
     }
-    const raw = JSON.parse(readFileSync(this.SETTINGS_FILE, "utf-8"));
+    const contents = readFileSync(this.SETTINGS_FILE, "utf-8");
+    let raw: unknown;
+    try {
+      raw = JSON.parse(contents) as unknown;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      throw new Error(
+        `Could not parse ${this.SETTINGS_FILE}: ${message}. Fix the file or remove it to use defaults.`
+      );
+    }
+    const o =
+      typeof raw === "object" && raw !== null
+        ? (raw as Record<string, unknown>)
+        : null;
     return {
       activeKey:
-        typeof raw.activeKey === "string"
-          ? raw.activeKey
+        typeof o?.activeKey === "string"
+          ? o.activeKey
           : DEFAULT_SETTINGS.activeKey,
       output:
-        raw.output === "table" || raw.output === "json"
-          ? raw.output
+        o?.output === "table" || o?.output === "json"
+          ? o.output
           : DEFAULT_SETTINGS.output,
-      apiKey: typeof raw.apiKey === "string" ? raw.apiKey : undefined,
+      apiKey: typeof o?.apiKey === "string" ? o.apiKey : undefined,
     };
   }
 
