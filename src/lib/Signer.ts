@@ -11,6 +11,8 @@ import {
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { createKeychainSigner } from "@solana/keychain";
+
 import { Config } from "./Config.ts";
 import { KeychainConfig } from "./KeychainConfig.ts";
 import { KeyPair } from "./KeyPair.ts";
@@ -55,7 +57,9 @@ export class Signer {
   public static async load(name: string): Promise<Signer> {
     if (KeychainConfig.isKeychainKey(name)) {
       const config = KeychainConfig.load(name);
-      const signer = await KeychainConfig.createSigner(config);
+      const signer = await createKeychainSigner(
+        KeychainConfig.toSignerConfig(config)
+      );
       return new Signer(signer, null);
     }
 
