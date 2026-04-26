@@ -27,19 +27,29 @@ export class ConfigCommand {
   private static list(): void {
     const settings = Config.load();
     if (Output.isJson()) {
-      Output.json(settings);
+      Output.json(this.redactForDisplay(settings));
       return;
     }
 
-    const data = Object.entries(settings).map(([key, value]) => ({
+    const display = this.redactForDisplay(settings);
+    const data = Object.entries(display).map(([key, value]) => ({
       setting: key,
-      value: value ? String(value) : "",
+      value: value != null && value !== "" ? String(value) : "",
     }));
     Output.table({
       type: "horizontal",
       headers: { setting: "Setting", value: "Value" },
       rows: data,
     });
+  }
+
+  private static redactForDisplay(
+    settings: ReturnType<typeof Config.load>
+  ): ReturnType<typeof Config.load> {
+    if (!settings.apiKey) {
+      return settings;
+    }
+    return { ...settings, apiKey: "<set>" };
   }
 
   private static set(opts: {
