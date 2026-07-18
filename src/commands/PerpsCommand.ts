@@ -72,7 +72,7 @@ export class PerpsCommand {
       .option("--key <name>", "Key to use (overrides active key)")
       .option("--address <address>", "Wallet address to look up")
       .option("--asset <asset>", "Filter by asset (SOL, BTC, ETH)")
-      .option("--side <side>", "Filter by side (long, short)")
+      .option("--side <side>", "Filter by side (long, short, buy, sell)")
       .option("--action <action>", "Filter by action (Increase, Decrease)")
       .option("--after <date>", "Show trades after this date or UNIX timestamp")
       .option(
@@ -939,9 +939,7 @@ export class PerpsCommand {
     ) {
       throw new Error("--action must be 'Increase' or 'Decrease'.");
     }
-    if (opts.side && opts.side !== "long" && opts.side !== "short") {
-      throw new Error("--side must be 'long' or 'short'.");
-    }
+    const side = opts.side ? this.normalizeSide(opts.side) : undefined;
 
     const address =
       opts.address ??
@@ -952,7 +950,7 @@ export class PerpsCommand {
       walletAddress: address,
       action: opts.action,
       mint,
-      side: opts.side,
+      side,
       start: 0,
       end: limit,
       createdAtAfter: opts.after ? this.parseTimestamp(opts.after) : undefined,
