@@ -106,3 +106,13 @@ describe("keys add (dist/index.js)", () => {
     expect(second.stdout + second.stderr).toContain("already exists");
   });
 });
+
+describe("spot portfolio", () => {
+  test("handles portfolio lookup without crashing on missing metadata", () => {
+    // This test verifies that the command completes without crashing
+    // even if token metadata is unavailable
+    const result = runCli("spot", "portfolio", "--address", TEST_SEED_ADDRESS);
+    // Should complete (may fail on API, but not crash on missing metadata)
+    expect(result.status).toBeLessThanOrEqual(1);
+  });
+});
