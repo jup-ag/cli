@@ -400,6 +400,9 @@ export class SpotCommand {
       }
       const info = tokenMap.get(mint);
       if (!info) {
+        console.warn(
+          `Warning: Could not fetch metadata for token ${mint}. Skipping.`
+        );
         continue;
       }
       const multiplier = Swap.getScaledUiMultiplier(info);
