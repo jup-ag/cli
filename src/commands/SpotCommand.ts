@@ -15,6 +15,7 @@ import {
 } from "../clients/UltraClient.ts";
 import { Asset, resolveWalletAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { DateConverter } from "../lib/DateConverter.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
@@ -928,13 +929,6 @@ export class SpotCommand {
   }
 
   private static parseTimestamp(value: string): string {
-    if (/^\d+$/.test(value)) {
-      return new Date(Number(value) * 1000).toISOString();
-    }
-    const ms = new Date(value).getTime();
-    if (isNaN(ms)) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-    return new Date(ms).toISOString();
+    return DateConverter.parseTimestamp(value);
   }
 }

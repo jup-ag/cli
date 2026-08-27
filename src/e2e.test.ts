@@ -106,3 +106,81 @@ describe("keys add (dist/index.js)", () => {
     expect(second.stdout + second.stderr).toContain("already exists");
   });
 });
+
+describe("perps open (leverage bounds)", () => {
+  test("rejects leverage below 1", () => {
+    const result = runCli(
+      "perps",
+      "open",
+      "--asset",
+      "SOL",
+      "--side",
+      "long",
+      "--amount",
+      "1",
+      "--leverage",
+      "0.5"
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "Leverage must be a number between 1 and 100"
+    );
+  });
+
+  test("rejects leverage above 100", () => {
+    const result = runCli(
+      "perps",
+      "open",
+      "--asset",
+      "SOL",
+      "--side",
+      "long",
+      "--amount",
+      "1",
+      "--leverage",
+      "101"
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "Leverage must be a number between 1 and 100"
+    );
+  });
+
+  test("rejects non-numeric leverage", () => {
+    const result = runCli(
+      "perps",
+      "open",
+      "--asset",
+      "SOL",
+      "--side",
+      "long",
+      "--amount",
+      "1",
+      "--leverage",
+      "abc"
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "Leverage must be a number between 1 and 100"
+    );
+  });
+
+  test("accepts valid leverage between 1 and 100", () => {
+    const result = runCli(
+      "perps",
+      "open",
+      "--asset",
+      "SOL",
+      "--side",
+      "long",
+      "--amount",
+      "1",
+      "--leverage",
+      "50"
+    );
+    // Will fail due to dry-run or API issues, but should NOT fail on leverage validation
+    expect(result.stdout + result.stderr).not.toContain(
+      "Leverage must be a number between 1 and 100"
+    );
+  });
+});

@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { PerpsClient } from "../clients/PerpsClient.ts";
 import { Asset, resolveAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { DateConverter } from "../lib/DateConverter.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
@@ -315,6 +316,12 @@ export class PerpsCommand {
       throw new Error(
         "--limit cannot be combined with --tp or --sl. Use 'perps set' after the limit order fills."
       );
+    }
+    if (opts.leverage) {
+      const leverageNum = Number(opts.leverage);
+      if (isNaN(leverageNum) || leverageNum < 1 || leverageNum > 100) {
+        throw new Error("Leverage must be a number between 1 and 100.");
+      }
     }
 
     const side = this.normalizeSide(opts.side);
@@ -904,14 +911,7 @@ export class PerpsCommand {
   }
 
   private static parseTimestamp(value: string): string {
-    if (/^\d+$/.test(value)) {
-      return value;
-    }
-    const ms = new Date(value).getTime();
-    if (isNaN(ms)) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-    return String(Math.floor(ms / 1000));
+    return DateConverter.parseTimestamp(value);
   }
 
   private static async history(opts: {
