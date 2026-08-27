@@ -610,8 +610,8 @@ export class SpotCommand {
     }
 
     const limit = Number(opts.limit);
-    if (isNaN(limit) || limit <= 0) {
-      throw new Error("--limit must be a positive number.");
+    if (isNaN(limit) || limit <= 0 || limit > 15) {
+      throw new Error("--limit must be between 1 and 15.");
     }
 
     const address =

@@ -106,3 +106,66 @@ describe("keys add (dist/index.js)", () => {
     expect(second.stdout + second.stderr).toContain("already exists");
   });
 });
+
+describe("spot history", () => {
+  test("rejects --limit greater than 15", () => {
+    const result = runCli(
+      "spot",
+      "history",
+      "--limit",
+      "16",
+      "--address",
+      TEST_SEED_ADDRESS
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "--limit must be between 1 and 15"
+    );
+  });
+
+  test("rejects --limit of 0", () => {
+    const result = runCli(
+      "spot",
+      "history",
+      "--limit",
+      "0",
+      "--address",
+      TEST_SEED_ADDRESS
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "--limit must be between 1 and 15"
+    );
+  });
+
+  test("rejects --limit of negative number", () => {
+    const result = runCli(
+      "spot",
+      "history",
+      "--limit",
+      "-5",
+      "--address",
+      TEST_SEED_ADDRESS
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stdout + result.stderr).toContain(
+      "--limit must be between 1 and 15"
+    );
+  });
+
+  test("accepts valid --limit between 1 and 15", () => {
+    // This will fail on API call (no real address), but validation should pass
+    const result = runCli(
+      "spot",
+      "history",
+      "--limit",
+      "10",
+      "--address",
+      TEST_SEED_ADDRESS
+    );
+    // Should fail due to API, not validation
+    expect(result.stdout + result.stderr).not.toContain(
+      "--limit must be between 1 and 15"
+    );
+  });
+});
