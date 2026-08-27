@@ -126,18 +126,39 @@ export class KeysCommand {
     );
     const keychainFiles = files.filter((f) => f.endsWith(".keychain.json"));
 
-    const keypairData = await Promise.all(
+    const results = await Promise.allSettled(
       keypairFiles.map(async (file) => {
         const name = file.replace(".json", "");
         const signer = await Signer.load(name);
         return {
           name,
           address: signer.address,
-          type: "keypair",
+          type: "keypair" as const,
           active: settings.activeKey === name,
         };
       })
     );
+
+    interface KeypairEntry {
+      name: string;
+      address: string;
+      type: "keypair";
+      active: boolean;
+    }
+
+    const keypairData: KeypairEntry[] = [];
+    const failedKeys: string[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i]!;
+      if (r.status === "fulfilled") {
+        keypairData.push(r.value);
+      } else {
+        failedKeys.push(
+          `${keypairFiles[i]!.replace(".json", "")} (${String(r.reason)})`
+        );
+      }
+    }
 
     const keychainData = keychainFiles.map((file) => {
       const name = file.replace(".keychain.json", "");
@@ -151,6 +172,12 @@ export class KeysCommand {
     });
 
     const data = [...keypairData, ...keychainData];
+
+    if (failedKeys.length > 0) {
+      console.warn(
+        `Warning: Failed to load ${failedKeys.length} key(s):\n${failedKeys.map((k) => `  - ${k}`).join("\n")}`
+      );
+    }
 
     if (Output.isJson()) {
       Output.json(data);
