@@ -317,6 +317,12 @@ export class PerpsCommand {
         "--limit cannot be combined with --tp or --sl. Use 'perps set' after the limit order fills."
       );
     }
+    if (opts.leverage) {
+      const leverageNum = Number(opts.leverage);
+      if (isNaN(leverageNum) || leverageNum < 1 || leverageNum > 100) {
+        throw new Error("Leverage must be a number between 1 and 100.");
+      }
+    }
 
     const side = this.normalizeSide(opts.side);
     const asset = opts.asset.toUpperCase();
