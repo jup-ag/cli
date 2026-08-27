@@ -5,6 +5,7 @@ import type { Command } from "commander";
 import { PerpsClient } from "../clients/PerpsClient.ts";
 import { Asset, resolveAsset } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { DateConverter } from "../lib/DateConverter.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
@@ -904,14 +905,7 @@ export class PerpsCommand {
   }
 
   private static parseTimestamp(value: string): string {
-    if (/^\d+$/.test(value)) {
-      return value;
-    }
-    const ms = new Date(value).getTime();
-    if (isNaN(ms)) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-    return String(Math.floor(ms / 1000));
+    return DateConverter.parseTimestamp(value);
   }
 
   private static async history(opts: {
