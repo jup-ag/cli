@@ -105,4 +105,29 @@ describe("keys add (dist/index.js)", () => {
     expect(second.status).not.toBe(0);
     expect(second.stdout + second.stderr).toContain("already exists");
   });
+
+  test("gracefully handles corrupted keypair files in keys list", () => {
+    // Create a corrupted keypair file directly
+    const keysDir = require("node:path").join(
+      tmpHome,
+      ".config",
+      "jup",
+      "keys"
+    );
+    require("node:fs").mkdirSync(keysDir, { recursive: true });
+    require("node:fs").writeFileSync(
+      require("node:path").join(keysDir, "valid-key.json"),
+      JSON.stringify([1, 2, 3, 4, 5])
+    );
+    require("node:fs").writeFileSync(
+      require("node:path").join(keysDir, "corrupted.json"),
+      "not valid json {"
+    );
+
+    // List should succeed without crashing (exit 0), even with corrupted file
+    const result = runCli("keys", "list");
+    expect(result.status).toBe(0);
+    // Should show the valid key in output
+    expect(result.stdout).toContain("valid-key");
+  });
 });
