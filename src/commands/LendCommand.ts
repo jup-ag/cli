@@ -1,15 +1,26 @@
 import type { Command } from "commander";
+import type { JupiterDatapi } from "jupiter-api-ts";
 
-import { DatapiClient } from "../clients/DatapiClient.ts";
 import { LendClient, type LendToken } from "../clients/LendClient.ts";
+import { resolveToken } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import type { SolanaRpc } from "../lib/SolanaRpc.ts";
 import { Swap } from "../lib/Swap.ts";
 
 export class LendCommand {
-  public static register(program: Command): void {
+  static #datapi: JupiterDatapi;
+  static #rpc: SolanaRpc;
+
+  public static register(
+    program: Command,
+    datapi: JupiterDatapi,
+    rpc: SolanaRpc
+  ): void {
+    this.#datapi = datapi;
+    this.#rpc = rpc;
     const lend = program
       .command("lend")
       .description("Lending and earning yield");
@@ -232,8 +243,8 @@ export class LendCommand {
     const settings = Config.load();
     const [signer, inputToken, outputToken] = await Promise.all([
       Signer.load(opts.key ?? settings.activeKey),
-      DatapiClient.resolveToken(lendToken.assetAddress),
-      DatapiClient.resolveToken(lendToken.address),
+      resolveToken(this.#datapi, lendToken.assetAddress),
+      resolveToken(this.#datapi, lendToken.address),
     ]);
 
     const swap = await Swap.execute({
@@ -242,6 +253,7 @@ export class LendCommand {
       outputToken,
       amount: opts.amount,
       rawAmount: opts.rawAmount,
+      rpc: this.#rpc,
     });
 
     const apyPct = this.rateToPct(lendToken.totalRate);
@@ -369,8 +381,8 @@ export class LendCommand {
     }
 
     const [inputToken, outputToken] = await Promise.all([
-      DatapiClient.resolveToken(lendToken.address),
-      DatapiClient.resolveToken(lendToken.assetAddress),
+      resolveToken(this.#datapi, lendToken.address),
+      resolveToken(this.#datapi, lendToken.assetAddress),
     ]);
 
     const swap = await Swap.execute({
@@ -378,6 +390,7 @@ export class LendCommand {
       inputToken,
       outputToken,
       rawAmount,
+      rpc: this.#rpc,
     });
 
     const apyPct = this.rateToPct(lendToken.totalRate);

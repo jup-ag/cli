@@ -15,9 +15,11 @@ import { version } from "../package.json";
 import { Config } from "./lib/Config.ts";
 import { createJupiterClients } from "./lib/JupiterApi.ts";
 import { Output } from "./lib/Output.ts";
+import { SolanaRpc } from "./lib/SolanaRpc.ts";
 
 Config.init();
 const jupiterClients = createJupiterClients();
+const solanaRpc = new SolanaRpc();
 
 const program = new Command();
 program
@@ -44,11 +46,11 @@ program
 
 ConfigCommand.register(program);
 KeysCommand.register(program);
-LendCommand.register(program);
+LendCommand.register(program, jupiterClients.datapi, solanaRpc);
 PerpsCommand.register(program);
-PredictionsCommand.register(program);
+PredictionsCommand.register(program, jupiterClients.datapi);
 SignCommand.register(program);
-SpotCommand.register(program);
+SpotCommand.register(program, jupiterClients.datapi, solanaRpc);
 UpdateCommand.register(program);
 VrfdCommand.register(program);
 

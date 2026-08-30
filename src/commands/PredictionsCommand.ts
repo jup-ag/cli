@@ -1,6 +1,7 @@
 import type { Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
+import type { JupiterDatapi } from "jupiter-api-ts";
 
 import {
   PredictionsClient,
@@ -15,7 +16,10 @@ import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 
 export class PredictionsCommand {
-  public static register(program: Command): void {
+  static #datapi: JupiterDatapi;
+
+  public static register(program: Command, datapi: JupiterDatapi): void {
+    this.#datapi = datapi;
     const predictions = program
       .command("predictions")
       .description("Prediction markets");
@@ -353,7 +357,11 @@ export class PredictionsCommand {
     const side = this.normalizeSide(opts.side);
     const isYes = side === "yes";
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const token = await resolveWalletAsset(signer.address, opts.input);
+    const token = await resolveWalletAsset(
+      this.#datapi,
+      signer.address,
+      opts.input
+    );
     const depositAmount = NumberConverter.toChainAmount(
       opts.amount,
       token.decimals

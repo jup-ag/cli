@@ -1,14 +1,15 @@
 import type { Base64EncodedBytes } from "@solana/kit";
 
-import type { Token } from "../clients/DatapiClient.ts";
 import {
   UltraClient,
   type GetOrderResponse,
   type PostExecuteResponse,
 } from "../clients/UltraClient.ts";
+import type { Token } from "./Asset.ts";
 import { Config } from "./Config.ts";
 import { NumberConverter } from "./NumberConverter.ts";
 import type { Signer } from "./Signer.ts";
+import type { SolanaRpc } from "./SolanaRpc.ts";
 
 export type SwapResult = {
   signer: Signer;
@@ -40,11 +41,14 @@ export class Swap {
     outputToken: Token;
     amount?: string;
     rawAmount?: string;
+    rpc: SolanaRpc;
     slippageBps?: string;
   }): Promise<SwapResult> {
-    const { signer, inputToken, outputToken } = opts;
-    const inputMultiplier = this.getScaledUiMultiplier(inputToken);
-    const outputMultiplier = this.getScaledUiMultiplier(outputToken);
+    const { signer, inputToken, outputToken, rpc } = opts;
+    const [inputMultiplier, outputMultiplier] = await Promise.all([
+      rpc.getScaledUiMultiplier(inputToken.id),
+      rpc.getScaledUiMultiplier(outputToken.id),
+    ]);
 
     const order = await UltraClient.getOrder({
       inputMint: inputToken.id,
@@ -136,16 +140,5 @@ export class Swap {
       outAmount,
       networkFeeLamports,
     };
-  }
-
-  public static getScaledUiMultiplier(token: Token): number | undefined {
-    if (!token.scaledUiConfig) {
-      return undefined;
-    }
-    const isNewMultiplierActive =
-      new Date() >= new Date(token.scaledUiConfig.newMultiplierEffectiveAt);
-    return isNewMultiplierActive
-      ? token.scaledUiConfig.newMultiplier
-      : token.scaledUiConfig.multiplier;
   }
 }
