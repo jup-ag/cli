@@ -40,7 +40,11 @@ export class LendCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.deposit(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.deposit(opts);
+      });
     earn
       .command("withdraw")
       .description("Withdraw tokens from lending")
@@ -54,7 +58,11 @@ export class LendCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.withdraw(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.withdraw(opts);
+      });
   }
 
   private static async tokens(): Promise<void> {

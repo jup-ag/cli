@@ -59,7 +59,11 @@ export class PredictionsCommand {
       )
       .option("--input <token>", "Input token (symbol or mint)", "USDC")
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.open(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.open(opts);
+      });
     predictions
       .command("close")
       .description("Close or claim a prediction position")
@@ -68,7 +72,11 @@ export class PredictionsCommand {
         "Position pubkey to close, or 'all'"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.close(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.close(opts);
+      });
     predictions
       .command("history")
       .description("View prediction trading history")

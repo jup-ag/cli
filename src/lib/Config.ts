@@ -67,6 +67,10 @@ export class Config {
     return this.load().rpcUrl ?? DEFAULT_RPC_URL;
   }
 
+  public static resolveDryRun(commandDryRun?: true): boolean {
+    return commandDryRun ?? this.dryRun;
+  }
+
   public static set(settings: Partial<Settings>): void {
     if (Object.keys(settings).length === 0) {
       throw new Error("No settings provided to update.");

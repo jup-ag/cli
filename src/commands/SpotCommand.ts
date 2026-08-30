@@ -60,7 +60,11 @@ export class SpotCommand {
         "--slippage <bps>",
         "Max slippage in basis points (leave empty to use Jupiter's Real-Time Slippage Estimation)"
       )
-      .action((opts) => this.swap(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.swap(opts);
+      });
     spot
       .command("portfolio")
       .description("Show spot portfolio for a wallet")
@@ -95,13 +99,21 @@ export class SpotCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.transfer(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.transfer(opts);
+      });
     spot
       .command("reclaim")
       .description("Reclaim SOL rent from empty token accounts")
       .option("--key <name>", "Key to use for signing")
       .option("--token <token>", "Token symbol or mint address to reclaim")
-      .action((opts) => this.reclaim(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.reclaim(opts);
+      });
   }
 
   private static async tokens(opts: {

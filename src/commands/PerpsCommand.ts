@@ -41,7 +41,11 @@ export class PerpsCommand {
       .option("--sl <price>", "Stop-loss trigger price")
       .option("--slippage <bps>", "Max slippage in basis points", "200")
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.open(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.open(opts);
+      });
     perps
       .command("set")
       .description("Update TP/SL or limit order trigger price")
@@ -51,7 +55,11 @@ export class PerpsCommand {
       .option("--sl <price>", "Stop-loss trigger price")
       .option("--limit <price>", "New trigger price for limit order")
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.set(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.set(opts);
+      });
     perps
       .command("close")
       .description("Close a position, cancel a limit order, or cancel TP/SL")
@@ -65,7 +73,11 @@ export class PerpsCommand {
       )
       .option("--slippage <bps>", "Max slippage in basis points", "200")
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.close(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.close(opts);
+      });
     perps
       .command("history")
       .description("View past trading activity")

@@ -23,7 +23,10 @@ program
   .description("Jupiter CLI for agentic workflows")
   .version(version)
   .option("-f, --format <type>", "Output format ('table' or 'json')")
-  .option("--dry-run", "Preview the transaction without signing or submitting")
+  .option(
+    "--dry-run",
+    "Sign and simulate the transaction without submitting it"
+  )
   .hook("preAction", (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts.format) {

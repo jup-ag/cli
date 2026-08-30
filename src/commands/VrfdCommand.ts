@@ -58,7 +58,11 @@ export class VrfdCommand {
         "Enable circulating supply URL"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.submit(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.submit(opts);
+      });
   }
 
   private static async check(opts: { token: string }): Promise<void> {

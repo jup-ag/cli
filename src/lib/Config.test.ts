@@ -34,6 +34,12 @@ describe("Config.load", () => {
     expect(Config.getRpcUrl()).toBe("https://api.mainnet.solana.com");
   });
 
+  test("uses a command dry-run flag when present", () => {
+    Config.dryRun = false;
+    expect(Config.resolveDryRun(true)).toBe(true);
+    expect(Config.resolveDryRun(undefined)).toBe(false);
+  });
+
   test("throws a clear error when settings.json is not valid json", () => {
     writeFileSync(
       join(TEST_DIR, "settings.json"),
