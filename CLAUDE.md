@@ -16,7 +16,7 @@ bun run dev
 bun build src/index.ts --compile --outfile jup
 
 # Format code
-bunx prettier --write .
+bun run fmt
 
 # Run all tests: lint, typecheck, tests
 bun run ci
@@ -87,7 +87,7 @@ When adding new commands, both input (options/arguments) and output (JSON/table)
 
 ## Code Style
 
-- Prettier with default config (double quotes, semicolons, 80 char width, trailing commas in ES5 positions)
+- Oxfmt with double quotes, semicolons, 80 character line width, and trailing commas in ES5 positions
 - TypeScript strict mode, ESNext target, bundler module resolution
 - All core modules use static methods (no instantiation for Config, Output, NumberConverter, clients)
 - Signer and KeyPair use instance methods with static factory constructors
