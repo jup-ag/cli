@@ -10,6 +10,7 @@ import {
   fetchMint,
   TOKEN_2022_PROGRAM_ADDRESS,
 } from "@solana-program/token-2022";
+import { TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 import { Config } from "./Config.ts";
 import { Signer } from "./Signer.ts";
@@ -43,6 +44,7 @@ export class SolanaRpc {
   readonly #fetch: typeof fetch;
   readonly #rpcClient: Rpc<GetAccountInfoApi>;
   readonly #url: string;
+  readonly #mints = new Map<string, ReturnType<typeof fetchMint>>();
   readonly #scaledUiMultipliers = new Map<
     string,
     Promise<number | undefined>
@@ -65,8 +67,19 @@ export class SolanaRpc {
     return multiplier;
   }
 
+  public async getTokenProgram(mint: string): Promise<Address> {
+    const account = await this.#fetchMint(address(mint));
+    if (
+      account.programAddress !== TOKEN_PROGRAM_ADDRESS &&
+      account.programAddress !== TOKEN_2022_PROGRAM_ADDRESS
+    ) {
+      throw new Error(`Mint ${mint} is not owned by an SPL Token program.`);
+    }
+    return account.programAddress;
+  }
+
   async #fetchScaledUiMultiplier(mint: Address): Promise<number | undefined> {
-    const account = await fetchMint(this.#rpcClient, mint);
+    const account = await this.#fetchMint(mint);
     if (account.programAddress !== TOKEN_2022_PROGRAM_ADDRESS) {
       return undefined;
     }
@@ -82,6 +95,17 @@ export class SolanaRpc {
     return timestamp >= config.newMultiplierEffectiveTimestamp
       ? config.newMultiplier
       : config.multiplier;
+  }
+
+  #fetchMint(mint: Address): ReturnType<typeof fetchMint> {
+    const cached = this.#mints.get(mint);
+    if (cached) {
+      return cached;
+    }
+
+    const account = fetchMint(this.#rpcClient, mint);
+    this.#mints.set(mint, account);
+    return account;
   }
 
   public async simulate(
