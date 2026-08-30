@@ -33,3 +33,15 @@ jup config set --api-key <key>
 # Delete or unset the API key
 jup config set --api-key
 ```
+
+### Set an RPC URL
+
+Signable commands use this RPC URL to simulate or submit transactions. It
+defaults to `https://api.mainnet.solana.com` when no custom endpoint is set.
+
+```bash
+jup config set --rpc-url https://your-rpc.example.com
+
+# Return to the mainnet default
+jup config set --rpc-url
+```
