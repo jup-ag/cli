@@ -1,26 +1,36 @@
+import type { Base64EncodedBytes } from "@solana/kit";
 import type { Command } from "commander";
-import type { JupiterDatapi } from "jupiter-api-ts";
+import type { JupiterApi, JupiterApiTypes } from "jupiter-api-ts";
 
-import { LendClient, type LendToken } from "../clients/LendClient.ts";
-import { resolveToken } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 import type { SolanaRpc } from "../lib/SolanaRpc.ts";
-import { Swap } from "../lib/Swap.ts";
+
+type LendToken = JupiterApiTypes.LendTokenInfo;
+
+type LendTransactionSubmission = {
+  serializedTransaction: string;
+  signature?: string;
+  simulation?: {
+    success: boolean;
+    error?: string;
+  };
+};
 
 export class LendCommand {
-  static #datapi: JupiterDatapi;
+  static #api: JupiterApi;
   static #rpc: SolanaRpc;
 
   public static register(
     program: Command,
-    datapi: JupiterDatapi,
-    rpc: SolanaRpc
+    rpc: SolanaRpc,
+    api: JupiterApi
   ): void {
-    this.#datapi = datapi;
     this.#rpc = rpc;
+    this.#api = api;
     const lend = program
       .command("lend")
       .description("Lending and earning yield");
@@ -77,7 +87,8 @@ export class LendCommand {
   }
 
   private static async tokens(): Promise<void> {
-    const lendTokens = await LendClient.getTokens();
+    requireJupiterApiKey();
+    const lendTokens = await this.#getTokens();
 
     const tokens = lendTokens.map((lt) => {
       const price = Number(lt.asset.price);
@@ -138,6 +149,7 @@ export class LendCommand {
     address?: string;
     token?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -146,7 +158,7 @@ export class LendCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
-    const allPositions = await LendClient.getPositions(address);
+    const allPositions = await this.#getPositions(address);
     let activePositions = allPositions.filter((p) => p.shares !== "0");
 
     if (opts.token) {
@@ -167,7 +179,7 @@ export class LendCommand {
     }
 
     const jlAddresses = activePositions.map((p) => p.token.address).join(",");
-    const earnings = await LendClient.getEarnings({
+    const earnings = await this.#getEarnings({
       user: address,
       positions: jlAddresses,
     });
@@ -235,28 +247,37 @@ export class LendCommand {
     rawAmount?: string;
     key?: string;
   }): Promise<void> {
-    Swap.validateAmountOpts(opts);
+    requireJupiterApiKey();
+    this.#validateAmountOpts(opts);
 
-    const lendTokens = await LendClient.getTokens();
+    const lendTokens = await this.#getTokens();
     const lendToken = this.resolveLendToken(lendTokens, opts.token);
 
     const settings = Config.load();
-    const [signer, inputToken, outputToken] = await Promise.all([
-      Signer.load(opts.key ?? settings.activeKey),
-      resolveToken(this.#datapi, lendToken.assetAddress),
-      resolveToken(this.#datapi, lendToken.address),
-    ]);
-
-    const swap = await Swap.execute({
-      signer,
-      inputToken,
-      outputToken,
-      amount: opts.amount,
-      rawAmount: opts.rawAmount,
-      rpc: this.#rpc,
+    const signer = await Signer.load(opts.key ?? settings.activeKey);
+    const rawAmount =
+      opts.rawAmount ??
+      NumberConverter.toChainAmount(opts.amount!, lendToken.asset.decimals);
+    const response = await this.#api.lend.lend.post({
+      body: {
+        asset: lendToken.assetAddress,
+        signer: signer.address,
+        amount: rawAmount,
+      },
     });
+    if (response.error || !response.data) {
+      throw new Error("Unable to build the Lend deposit transaction.");
+    }
 
     const apyPct = this.rateToPct(lendToken.totalRate);
+    const depositedAmount = NumberConverter.fromChainAmount(
+      rawAmount,
+      lendToken.asset.decimals
+    );
+    const submission = await this.#submitTransaction(
+      signer,
+      response.data.transaction
+    );
 
     if (Config.dryRun) {
       if (Output.isJson()) {
@@ -267,11 +288,10 @@ export class LendCommand {
             symbol: lendToken.asset.symbol,
             decimals: lendToken.asset.decimals,
           },
-          depositedAmount: swap.inAmount,
-          depositedUsd: swap.order.inUsdValue,
+          depositedAmount,
           apyPct,
-          signature: null,
-          transaction: swap.order.transaction,
+          serializedTransaction: submission.serializedTransaction,
+          simulation: submission.simulation!,
         });
         return;
       }
@@ -282,12 +302,23 @@ export class LendCommand {
         rows: [
           {
             label: "Deposited",
-            value: `${swap.inAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.inUsdValue)})`,
+            value: `${depositedAmount} ${lendToken.asset.symbol}`,
           },
           {
             label: "APY",
             value: Output.formatPercentageChange(apyPct),
           },
+          {
+            label: "Serialized Transaction",
+            value: submission.serializedTransaction,
+          },
+          {
+            label: "Simulation",
+            value: submission.simulation!.success ? "Passed" : "Failed",
+          },
+          ...(submission.simulation!.error
+            ? [{ label: "Error", value: submission.simulation!.error }]
+            : []),
         ],
       });
       return;
@@ -305,12 +336,11 @@ export class LendCommand {
           symbol: lendToken.asset.symbol,
           decimals: lendToken.asset.decimals,
         },
-        depositedAmount: swap.inAmount,
-        depositedUsd: swap.order.inUsdValue,
+        depositedAmount,
         positionAmount,
         positionUsd: positionAmount * price,
         apyPct,
-        signature: swap.result!.signature,
+        signature: submission.signature!,
       });
       return;
     }
@@ -320,7 +350,7 @@ export class LendCommand {
       rows: [
         {
           label: "Deposited",
-          value: `${swap.inAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.inUsdValue)})`,
+          value: `${depositedAmount} ${lendToken.asset.symbol}`,
         },
         {
           label: "Position",
@@ -332,7 +362,7 @@ export class LendCommand {
         },
         {
           label: "Tx Signature",
-          value: swap.result!.signature,
+          value: submission.signature!,
         },
       ],
     });
@@ -344,21 +374,20 @@ export class LendCommand {
     rawAmount?: string;
     key?: string;
   }): Promise<void> {
-    if (opts.amount && opts.rawAmount) {
-      throw new Error("Only one of --amount or --raw-amount can be provided.");
-    }
+    requireJupiterApiKey();
+    this.#validateWithdrawAmountOpts(opts);
 
-    const lendTokens = await LendClient.getTokens();
+    const lendTokens = await this.#getTokens();
     const lendToken = this.resolveLendToken(lendTokens, opts.token);
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
 
-    let rawAmount = opts.rawAmount;
+    let withdrawnRawAmount: string;
+    let transaction: string;
 
     if (!opts.amount && !opts.rawAmount) {
-      // Withdraw entire position — use full shares balance
-      const positions = await LendClient.getPositions(signer.address);
+      const positions = await this.#getPositions(signer.address);
       const position = positions.find(
         (p) => p.token.address === lendToken.address
       );
@@ -367,33 +396,44 @@ export class LendCommand {
           `No lending position found for ${lendToken.asset.symbol}.`
         );
       }
-      rawAmount = position.shares;
-    } else if (opts.amount) {
-      // Convert underlying amount to jlToken amount using convertToShares
-      const chainAmount = NumberConverter.toChainAmount(
-        opts.amount,
-        lendToken.asset.decimals
-      );
-      const shares =
-        (BigInt(chainAmount) * BigInt(lendToken.convertToShares)) /
-        BigInt(10 ** lendToken.decimals);
-      rawAmount = shares.toString();
+      const response = await this.#api.lend.lend.post7({
+        body: {
+          asset: lendToken.assetAddress,
+          signer: signer.address,
+          shares: position.shares,
+        },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Unable to build the Lend redeem transaction.");
+      }
+      transaction = response.data.transaction;
+      withdrawnRawAmount = (
+        (BigInt(position.shares) * BigInt(lendToken.convertToAssets)) /
+        BigInt(10 ** lendToken.decimals)
+      ).toString();
+    } else {
+      withdrawnRawAmount =
+        opts.rawAmount ??
+        NumberConverter.toChainAmount(opts.amount!, lendToken.asset.decimals);
+      const response = await this.#api.lend.lend.post3({
+        body: {
+          asset: lendToken.assetAddress,
+          signer: signer.address,
+          amount: withdrawnRawAmount,
+        },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Unable to build the Lend withdraw transaction.");
+      }
+      transaction = response.data.transaction;
     }
 
-    const [inputToken, outputToken] = await Promise.all([
-      resolveToken(this.#datapi, lendToken.address),
-      resolveToken(this.#datapi, lendToken.assetAddress),
-    ]);
-
-    const swap = await Swap.execute({
-      signer,
-      inputToken,
-      outputToken,
-      rawAmount,
-      rpc: this.#rpc,
-    });
-
     const apyPct = this.rateToPct(lendToken.totalRate);
+    const withdrawnAmount = NumberConverter.fromChainAmount(
+      withdrawnRawAmount,
+      lendToken.asset.decimals
+    );
+    const submission = await this.#submitTransaction(signer, transaction);
 
     if (Config.dryRun) {
       if (Output.isJson()) {
@@ -404,11 +444,10 @@ export class LendCommand {
             symbol: lendToken.asset.symbol,
             decimals: lendToken.asset.decimals,
           },
-          withdrawnAmount: swap.outAmount,
-          withdrawnUsd: swap.order.outUsdValue,
+          withdrawnAmount,
           apyPct,
-          signature: null,
-          transaction: swap.order.transaction,
+          serializedTransaction: submission.serializedTransaction,
+          simulation: submission.simulation!,
         });
         return;
       }
@@ -419,12 +458,23 @@ export class LendCommand {
         rows: [
           {
             label: "Withdrawn",
-            value: `${swap.outAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.outUsdValue)})`,
+            value: `${withdrawnAmount} ${lendToken.asset.symbol}`,
           },
           {
             label: "APY",
             value: Output.formatPercentageChange(apyPct),
           },
+          {
+            label: "Serialized Transaction",
+            value: submission.serializedTransaction,
+          },
+          {
+            label: "Simulation",
+            value: submission.simulation!.success ? "Passed" : "Failed",
+          },
+          ...(submission.simulation!.error
+            ? [{ label: "Error", value: submission.simulation!.error }]
+            : []),
         ],
       });
       return;
@@ -442,12 +492,11 @@ export class LendCommand {
           symbol: lendToken.asset.symbol,
           decimals: lendToken.asset.decimals,
         },
-        withdrawnAmount: swap.outAmount,
-        withdrawnUsd: swap.order.outUsdValue,
+        withdrawnAmount,
         positionAmount,
         positionUsd: positionAmount * price,
         apyPct,
-        signature: swap.result!.signature,
+        signature: submission.signature!,
       });
       return;
     }
@@ -457,7 +506,7 @@ export class LendCommand {
       rows: [
         {
           label: "Withdrawn",
-          value: `${swap.outAmount} ${lendToken.asset.symbol} (${Output.formatDollar(swap.order.outUsdValue)})`,
+          value: `${withdrawnAmount} ${lendToken.asset.symbol}`,
         },
         {
           label: "Position",
@@ -469,7 +518,7 @@ export class LendCommand {
         },
         {
           label: "Tx Signature",
-          value: swap.result!.signature,
+          value: submission.signature!,
         },
       ],
     });
@@ -479,7 +528,7 @@ export class LendCommand {
     address: string,
     lendToken: LendToken
   ): Promise<{ positionAmount: number; price: number }> {
-    const positions = await LendClient.getPositions(address);
+    const positions = await this.#getPositions(address);
     const position = positions.find(
       (p) => p.token.address === lendToken.address
     );
@@ -514,6 +563,78 @@ export class LendCommand {
       );
     }
     return match;
+  }
+
+  static async #getTokens(): Promise<JupiterApiTypes.LendTokensResponse> {
+    const response = await this.#api.lend.lend.get();
+    if (response.error || !response.data) {
+      throw new Error("Unable to get Lend tokens.");
+    }
+    return response.data;
+  }
+
+  static async #getPositions(
+    users: string
+  ): Promise<JupiterApiTypes.LendUserPositionsResponse> {
+    const response = await this.#api.lend.lend.get2({ query: { users } });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get Lend positions.");
+    }
+    return response.data;
+  }
+
+  static async #getEarnings({
+    user,
+    positions,
+  }: {
+    user: string;
+    positions: string;
+  }): Promise<JupiterApiTypes.LendUserEarningsResponse[]> {
+    const response = await this.#api.lend.lend.get3({
+      query: { user, positions },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get Lend earnings.");
+    }
+    return [response.data];
+  }
+
+  static #validateAmountOpts(opts: {
+    amount?: string;
+    rawAmount?: string;
+  }): void {
+    if (!opts.amount && !opts.rawAmount) {
+      throw new Error("Either --amount or --raw-amount must be provided.");
+    }
+    this.#validateWithdrawAmountOpts(opts);
+  }
+
+  static #validateWithdrawAmountOpts(opts: {
+    amount?: string;
+    rawAmount?: string;
+  }): void {
+    if (opts.amount && opts.rawAmount) {
+      throw new Error("Only one of --amount or --raw-amount can be provided.");
+    }
+  }
+
+  static async #submitTransaction(
+    signer: Signer,
+    transaction: string
+  ): Promise<LendTransactionSubmission> {
+    const serializedTransaction = await signer.signTransaction(
+      transaction as Base64EncodedBytes
+    );
+    if (Config.dryRun) {
+      return {
+        serializedTransaction,
+        simulation: await this.#rpc.simulate(serializedTransaction),
+      };
+    }
+    return {
+      serializedTransaction,
+      signature: await this.#rpc.send(serializedTransaction),
+    };
   }
 
   private static rateToPct(rate: string): number {

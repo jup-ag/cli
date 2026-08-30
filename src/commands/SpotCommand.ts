@@ -2,7 +2,11 @@ import { findAssociatedTokenPda } from "@solana-program/token";
 import { isAddress, type Address, type Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
-import type { JupiterDatapi } from "jupiter-api-ts";
+import type {
+  JupiterApi,
+  JupiterDatapi,
+  JupiterApiTypes,
+} from "jupiter-api-ts";
 
 import {
   UltraClient,
@@ -18,6 +22,7 @@ import {
   type Token,
 } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
@@ -26,15 +31,18 @@ import { Swap } from "../lib/Swap.ts";
 
 export class SpotCommand {
   static #datapi: JupiterDatapi;
+  static #api: JupiterApi;
   static #rpc: SolanaRpc;
 
   public static register(
     program: Command,
     datapi: JupiterDatapi,
-    rpc: SolanaRpc
+    rpc: SolanaRpc,
+    api: JupiterApi
   ): void {
     this.#datapi = datapi;
     this.#rpc = rpc;
+    this.#api = api;
     const spot = program
       .command("spot")
       .description("Swaps, transfers, token and portfolio data");
@@ -175,6 +183,7 @@ export class SpotCommand {
     amount?: string;
     rawAmount?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
     const [inputToken, outputToken] = await Promise.all([
@@ -185,20 +194,23 @@ export class SpotCommand {
       this.#rpc.getScaledUiMultiplier(inputToken.id),
       this.#rpc.getScaledUiMultiplier(outputToken.id),
     ]);
-    const order = await UltraClient.getOrder({
-      inputMint: inputToken.id,
-      outputMint: outputToken.id,
-      amount:
-        opts.rawAmount ??
-        NumberConverter.toChainAmount(
-          opts.amount!,
-          inputToken.decimals,
-          inputMultiplier
-        ),
+    const response = await this.#api.ultra.get({
+      query: {
+        inputMint: inputToken.id,
+        outputMint: outputToken.id,
+        amount:
+          opts.rawAmount ??
+          NumberConverter.toChainAmount(
+            opts.amount!,
+            inputToken.decimals,
+            inputMultiplier
+          ),
+      },
     });
-    if (order.error) {
-      throw new Error(order.errorMessage ?? order.error);
+    if (response.error || !response.data) {
+      throw new Error("Unable to get a swap quote.");
     }
+    const order = response.data;
 
     const inAmount = NumberConverter.fromChainAmount(
       order.inAmount,
@@ -259,6 +271,7 @@ export class SpotCommand {
     key?: string;
     slippage?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
     if (opts.slippage !== undefined) {
@@ -271,12 +284,13 @@ export class SpotCommand {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
     const [inputToken, outputToken] = await Promise.all([
-      resolveWalletAsset(this.#datapi, signer.address, opts.from),
+      resolveWalletAsset(this.#api, this.#datapi, signer.address, opts.from),
       resolveToken(this.#datapi, opts.to),
     ]);
 
     const swap = await Swap.execute({
       signer,
+      api: this.#api,
       inputToken,
       outputToken,
       amount: opts.amount,
@@ -312,7 +326,8 @@ export class SpotCommand {
         priceImpact: swap.order.priceImpact,
         networkFeeLamports: swap.networkFeeLamports,
         ...(Config.dryRun && {
-          transaction: swap.order.transaction,
+          serializedTransaction: swap.serializedTransaction,
+          simulation: swap.simulation,
         }),
       });
       return;
@@ -341,8 +356,20 @@ export class SpotCommand {
           value: `${networkFee} SOL`,
         },
         ...(!Config.dryRun
-          ? [{ label: "Tx Signature", value: swap.result!.signature }]
-          : []),
+          ? [{ label: "Tx Signature", value: swap.result!.signature ?? "—" }]
+          : [
+              {
+                label: "Serialized Transaction",
+                value: swap.serializedTransaction!,
+              },
+              {
+                label: "Simulation",
+                value: swap.simulation!.success ? "Success" : "Failed",
+              },
+              ...(swap.simulation!.error
+                ? [{ label: "Simulation Error", value: swap.simulation!.error }]
+                : []),
+            ]),
       ],
     });
   }
@@ -351,6 +378,7 @@ export class SpotCommand {
     address?: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -361,10 +389,14 @@ export class SpotCommand {
 
     const SOL_DECIMALS = Asset.SOL.decimals;
 
-    const raw = await UltraClient.getHoldings(address);
+    const response = await this.#api.ultra.get3({ path: { address } });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get spot holdings.");
+    }
+    const raw = response.data;
 
     // Preprocess: extract only ATA entries, keyed by mint
-    const ataByMint = new Map<string, HoldingsTokenAccount>();
+    const ataByMint = new Map<string, JupiterApiTypes.UltraTokenAccount>();
     for (const [mint, accounts] of Object.entries(raw.tokens)) {
       const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
       if (ata) {
@@ -435,7 +467,6 @@ export class SpotCommand {
         rawAmount: ata.amount,
         value: amount * (info.usdPrice ?? 0),
         price: info.usdPrice ?? 0,
-        reclaimableLamports: ata.reclaimableLamports,
       });
     }
 
@@ -479,11 +510,13 @@ export class SpotCommand {
     to: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
     const token = await resolveWalletAsset(
+      this.#api,
       this.#datapi,
       signer.address,
       opts.token
@@ -765,6 +798,7 @@ export class SpotCommand {
     key?: string;
     token?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
     const holdings = await UltraClient.getHoldings(signer.address);
 

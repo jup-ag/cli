@@ -1,7 +1,9 @@
 import { address, isAddress } from "@solana/kit";
-import type { JupiterDatapi, JupiterDatapiTypes } from "jupiter-api-ts";
-
-import { UltraClient } from "../clients/UltraClient.ts";
+import type {
+  JupiterApi,
+  JupiterDatapi,
+  JupiterDatapiTypes,
+} from "jupiter-api-ts";
 
 type AssetInfo = {
   readonly id: ReturnType<typeof address>;
@@ -94,6 +96,7 @@ export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {
 }
 
 export async function resolveWalletAsset(
+  api: JupiterApi,
   datapi: JupiterDatapi,
   walletAddress: string,
   asset: string
@@ -108,7 +111,13 @@ export async function resolveWalletAsset(
     return resolveToken(datapi, Asset[key as keyof typeof Asset].id);
   }
 
-  const holdings = await UltraClient.getHoldings(walletAddress);
+  const response = await api.ultra.get3({
+    path: { address: walletAddress },
+  });
+  if (response.error || !response.data) {
+    throw new Error("Unable to get wallet holdings.");
+  }
+  const holdings = response.data;
   const mints = Object.keys(holdings.tokens);
   if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
     mints.push(Asset.SOL.id);

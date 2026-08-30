@@ -46,13 +46,23 @@ program
 
 ConfigCommand.register(program);
 KeysCommand.register(program);
-LendCommand.register(program, jupiterClients.datapi, solanaRpc);
-PerpsCommand.register(program);
-PredictionsCommand.register(program, jupiterClients.datapi);
+LendCommand.register(program, solanaRpc, jupiterClients.api);
+PerpsCommand.register(program, jupiterClients.perps, solanaRpc);
+PredictionsCommand.register(
+  program,
+  jupiterClients.datapi,
+  solanaRpc,
+  jupiterClients.api
+);
 SignCommand.register(program);
-SpotCommand.register(program, jupiterClients.datapi, solanaRpc);
+SpotCommand.register(
+  program,
+  jupiterClients.datapi,
+  solanaRpc,
+  jupiterClients.api
+);
 UpdateCommand.register(program);
-VrfdCommand.register(program);
+VrfdCommand.register(program, solanaRpc, jupiterClients.api);
 
 program.parseAsync().catch(async (err: unknown) => {
   await Output.error(err);
