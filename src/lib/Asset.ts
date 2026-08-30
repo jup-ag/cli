@@ -1,6 +1,6 @@
 import { address, isAddress } from "@solana/kit";
+import type { JupiterDatapi, JupiterDatapiTypes } from "jupiter-api-ts";
 
-import { DatapiClient, type Token } from "../clients/DatapiClient.ts";
 import { UltraClient } from "../clients/UltraClient.ts";
 
 type AssetInfo = {
@@ -29,6 +29,61 @@ export const Asset = {
 
 export type Asset = (typeof Asset)[keyof typeof Asset];
 
+export type Token = JupiterDatapiTypes.Asset & { decimals: number };
+
+export async function searchTokens(params: {
+  datapi: JupiterDatapi;
+  query: string;
+  limit?: number;
+}): Promise<Token[]> {
+  const { datapi, ...query } = params;
+  const response = await datapi.searchAssets({ query });
+  if (response.error || !response.data) {
+    throw new Error("Data API token search failed.");
+  }
+  return response.data.filter(
+    (asset): asset is Token => typeof asset.decimals === "number"
+  );
+}
+
+export async function getTokensByMints(
+  datapi: JupiterDatapi,
+  mints: string[]
+): Promise<Token[]> {
+  if (mints.length === 0) {
+    return [];
+  }
+  const batches: string[][] = [];
+  for (let i = 0; i < mints.length; i += 100) {
+    batches.push(mints.slice(i, i + 100));
+  }
+  const results = await Promise.all(
+    batches.map(async (batch) => {
+      const response = await datapi.getAssetsByIds({
+        query: { ids: batch.join(",") },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Data API asset lookup failed.");
+      }
+      return response.data.assets.filter(
+        (asset): asset is Token => typeof asset.decimals === "number"
+      );
+    })
+  );
+  return results.flat();
+}
+
+export async function resolveToken(
+  datapi: JupiterDatapi,
+  input: string
+): Promise<Token> {
+  const [token] = await searchTokens({ datapi, query: input, limit: 1 });
+  if (!token) {
+    throw new Error(`Token not found: ${input}`);
+  }
+  return token;
+}
+
 export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {
   const key = name.toUpperCase();
   const asset = Asset[key as keyof typeof Asset];
@@ -39,17 +94,18 @@ export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {
 }
 
 export async function resolveWalletAsset(
+  datapi: JupiterDatapi,
   walletAddress: string,
   asset: string
 ): Promise<Token> {
   if (isAddress(asset)) {
-    return DatapiClient.resolveToken(asset);
+    return resolveToken(datapi, asset);
   }
 
   const key = asset.toUpperCase();
   // Prevent full holdings lookup for well-known tokens
   if (key in Asset) {
-    return DatapiClient.resolveToken(Asset[key as keyof typeof Asset].id);
+    return resolveToken(datapi, Asset[key as keyof typeof Asset].id);
   }
 
   const holdings = await UltraClient.getHoldings(walletAddress);
@@ -57,7 +113,7 @@ export async function resolveWalletAsset(
   if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
     mints.push(Asset.SOL.id);
   }
-  const tokens = await DatapiClient.getTokensByMints(mints);
+  const tokens = await getTokensByMints(datapi, mints);
   const query = asset.toLowerCase();
   const matches = tokens.filter((t) => t.symbol.toLowerCase() === query);
 
