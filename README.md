@@ -36,6 +36,8 @@ jup sign --tx <base64-transaction>
 
 # View your spot portfolio
 jup spot portfolio
+# View your spot trade history (does not require a Jupiter Core API key)
+jup spot history
 # Swap 1 SOL to USDC
 jup spot swap --from SOL --to USDC --amount 1
 # Reclaim rent from empty token accounts
