@@ -1,7 +1,15 @@
 import type {
+  Address,
   Base64EncodedBytes,
   Base64EncodedWireTransaction,
+  GetAccountInfoApi,
+  Rpc,
 } from "@solana/kit";
+import { address, createSolanaRpc, unwrapOption } from "@solana/kit";
+import {
+  fetchMint,
+  TOKEN_2022_PROGRAM_ADDRESS,
+} from "@solana-program/token-2022";
 
 import { Config } from "./Config.ts";
 import { Signer } from "./Signer.ts";
@@ -27,16 +35,53 @@ type SimulationResult = {
 
 type SolanaRpcOptions = {
   fetch?: typeof fetch;
+  rpcClient?: Rpc<GetAccountInfoApi>;
   url?: string;
 };
 
 export class SolanaRpc {
   readonly #fetch: typeof fetch;
+  readonly #rpcClient: Rpc<GetAccountInfoApi>;
   readonly #url: string;
+  readonly #scaledUiMultipliers = new Map<
+    string,
+    Promise<number | undefined>
+  >();
 
   public constructor(options: SolanaRpcOptions = {}) {
     this.#fetch = options.fetch ?? fetch;
     this.#url = options.url ?? Config.getRpcUrl();
+    this.#rpcClient = options.rpcClient ?? createSolanaRpc(this.#url);
+  }
+
+  public getScaledUiMultiplier(mint: string): Promise<number | undefined> {
+    const cached = this.#scaledUiMultipliers.get(mint);
+    if (cached) {
+      return cached;
+    }
+
+    const multiplier = this.#fetchScaledUiMultiplier(address(mint));
+    this.#scaledUiMultipliers.set(mint, multiplier);
+    return multiplier;
+  }
+
+  async #fetchScaledUiMultiplier(mint: Address): Promise<number | undefined> {
+    const account = await fetchMint(this.#rpcClient, mint);
+    if (account.programAddress !== TOKEN_2022_PROGRAM_ADDRESS) {
+      return undefined;
+    }
+
+    const config = unwrapOption(account.data.extensions)?.find(
+      (extension) => extension.__kind === "ScaledUiAmountConfig"
+    );
+    if (!config || config.__kind !== "ScaledUiAmountConfig") {
+      return undefined;
+    }
+
+    const timestamp = BigInt(Math.floor(Date.now() / 1_000));
+    return timestamp >= config.newMultiplierEffectiveTimestamp
+      ? config.newMultiplier
+      : config.multiplier;
   }
 
   public async simulate(
