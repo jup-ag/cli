@@ -13,9 +13,11 @@ import { VrfdCommand } from "./commands/VrfdCommand.ts";
 
 import { version } from "../package.json";
 import { Config } from "./lib/Config.ts";
+import { createJupiterClients } from "./lib/JupiterApi.ts";
 import { Output } from "./lib/Output.ts";
 
 Config.init();
+const jupiterClients = createJupiterClients();
 
 const program = new Command();
 program
