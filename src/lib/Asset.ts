@@ -1,5 +1,5 @@
 import { address } from "@solana/kit";
-import type { JupiterDatapi, JupiterDatapiTypes } from "jupiter-api-ts";
+import type { JupiterApi, JupiterDatapi } from "jupiter-api-ts";
 
 type AssetInfo = {
   readonly id: ReturnType<typeof address>;
@@ -27,21 +27,36 @@ export const Asset = {
 
 export type Asset = (typeof Asset)[keyof typeof Asset];
 
-export type Token = JupiterDatapiTypes.Asset & { decimals: number };
+export type Token = {
+  id: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  usdPrice?: number;
+  mcap?: number;
+  [key: string]: unknown;
+};
 
 export async function searchTokens(params: {
-  datapi: JupiterDatapi;
+  api: JupiterApi;
   query: string;
   limit?: number;
 }): Promise<Token[]> {
-  const { datapi, ...query } = params;
-  const response = await datapi.searchAssets({ query });
+  const { api, query, limit } = params;
+  const response = await api.tokens.v2.getTokensV2Search({
+    query: { query },
+  });
   if (response.error || !response.data) {
-    throw new Error("Data API token search failed.");
+    throw new Error("Tokens V2 search failed.");
   }
-  return response.data.filter(
-    (asset): asset is Token => typeof asset.decimals === "number"
+  const tokens = response.data.filter(
+    (token): token is Token =>
+      typeof token.id === "string" &&
+      typeof token.name === "string" &&
+      typeof token.symbol === "string" &&
+      typeof token.decimals === "number"
   );
+  return limit === undefined ? tokens : tokens.slice(0, limit);
 }
 
 export async function getTokensByMints(
@@ -72,10 +87,10 @@ export async function getTokensByMints(
 }
 
 export async function resolveToken(
-  datapi: JupiterDatapi,
+  api: JupiterApi,
   input: string
 ): Promise<Token> {
-  const [token] = await searchTokens({ datapi, query: input, limit: 1 });
+  const [token] = await searchTokens({ api, query: input, limit: 1 });
   if (!token) {
     throw new Error(`Token not found: ${input}`);
   }

@@ -1,6 +1,8 @@
 # Spot Trading
 
-Requires: an active key for swap and transfer commands. See [setup](setup.md).
+Requires: a Jupiter API key for token search, quotes, swaps, transfers, and
+token-filtered history. An active key is also required for signing swaps,
+transfers, and reclaim transactions. See [setup](setup.md).
 
 ## Token resolution
 
@@ -9,8 +11,9 @@ Anywhere a token is specified (`--from`, `--to`, `--token`, `--search`), you can
 - **Symbol** (e.g. `SOL`, `USDC`, `JUP`) — the CLI auto-resolves to the best-matching token
 - **Mint address** (e.g. `So11111111111111111111111111111111111111112`) — exact match
 
-Token arguments resolve through Jupiter's global token search, which picks the top
-result. Use a mint address whenever a symbol might be ambiguous.
+Token arguments resolve through Jupiter Tokens V2 search, which picks the top
+result. A comma-separated list of up to 100 mint addresses can be looked up in
+one request. Use a mint address whenever a symbol might be ambiguous.
 
 ## Commands
 
@@ -33,6 +36,7 @@ jup spot quote --from <mint> --to <mint> --raw-amount 1000000000
 - `--amount` uses human-readable units (e.g. `1` SOL = 1 SOL)
 - `--raw-amount` uses on-chain units (e.g. `1000000000` lamports = 1 SOL)
 - Exactly one of `--amount` or `--raw-amount` is required
+- Requires a Jupiter API key
 
 ```js
 // Example JSON response:
@@ -58,7 +62,8 @@ jup spot swap --from SOL --to USDC --amount 1 --dry-run
 
 - `--key` overrides the active key for this transaction
 - `--slippage` sets max slippage in basis points (e.g. `50` = 0.5%). Omit it to use Jupiter's default.
-- `--dry-run` previews the swap without signing or submitting. The API still simulates the transaction, so errors like insufficient balance are caught. In JSON mode, the response includes the unsigned base64 `transaction` for external signing.
+- `--dry-run` signs and simulates the transaction through the configured RPC without submitting it. In JSON mode, the response includes the signed serialized transaction and simulation result.
+- Requires a Jupiter API key
 
 ```js
 // Example JSON response:
@@ -172,6 +177,7 @@ jup transfer --token SOL --to <recipient-address> --amount 1 --dry-run
 - Works with both SOL and any SPL token. The CLI builds the System Program or SPL Token transaction locally and sends it through the configured RPC URL.
 - `--token` accepts a symbol or mint address
 - `--dry-run` signs and simulates the transfer without submitting it. JSON response includes the signed `serializedTransaction` and simulation result.
+- Requires a Jupiter API key to resolve `--token`
 
 ```js
 // Example JSON response:

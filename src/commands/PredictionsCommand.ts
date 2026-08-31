@@ -4,7 +4,6 @@ import type { Command } from "commander";
 import type {
   JupiterApi,
   JupiterApiTypes,
-  JupiterDatapi,
 } from "jupiter-api-ts";
 import { resolveToken } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
@@ -21,17 +20,14 @@ type PredictionSubmission = {
 };
 
 export class PredictionsCommand {
-  static #datapi: JupiterDatapi;
   static #api: JupiterApi;
   static #rpc: SolanaRpc;
 
   public static register(
     program: Command,
-    datapi: JupiterDatapi,
     rpc: SolanaRpc,
     api: JupiterApi
   ): void {
-    this.#datapi = datapi;
     this.#rpc = rpc;
     this.#api = api;
     const predictions = program
@@ -455,7 +451,7 @@ export class PredictionsCommand {
     const side = this.normalizeSide(opts.side);
     const isYes = side === "yes";
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const token = await resolveToken(this.#datapi, opts.input);
+    const token = await resolveToken(this.#api, opts.input);
     const depositAmount = NumberConverter.toChainAmount(
       opts.amount,
       token.decimals

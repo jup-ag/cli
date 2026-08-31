@@ -50,7 +50,6 @@ LendCommand.register(program, solanaRpc, jupiterClients.api);
 PerpsCommand.register(program, jupiterClients.perps, solanaRpc);
 PredictionsCommand.register(
   program,
-  jupiterClients.datapi,
   solanaRpc,
   jupiterClients.api
 );

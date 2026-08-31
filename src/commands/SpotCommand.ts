@@ -142,12 +142,13 @@ export class SpotCommand {
     search: string;
     limit?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.limit && isNaN(Number(opts.limit))) {
       throw new Error("--limit must be a number");
     }
 
     const tokens = await searchTokens({
-      datapi: this.#datapi,
+      api: this.#api,
       query: opts.search,
       limit: opts.limit ? Number(opts.limit) : undefined,
     });
@@ -188,8 +189,8 @@ export class SpotCommand {
     Swap.validateAmountOpts(opts);
 
     const [inputToken, outputToken] = await Promise.all([
-      resolveToken(this.#datapi, opts.from),
-      resolveToken(this.#datapi, opts.to),
+      resolveToken(this.#api, opts.from),
+      resolveToken(this.#api, opts.to),
     ]);
     const [inputMultiplier, outputMultiplier] = await Promise.all([
       this.#rpc.getScaledUiMultiplier(inputToken.id),
@@ -288,8 +289,8 @@ export class SpotCommand {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
     const [inputToken, outputToken] = await Promise.all([
-      resolveToken(this.#datapi, opts.from),
-      resolveToken(this.#datapi, opts.to),
+      resolveToken(this.#api, opts.from),
+      resolveToken(this.#api, opts.to),
     ]);
 
     const swap = await Swap.execute({
@@ -441,6 +442,7 @@ export class SpotCommand {
     to: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
     if (!isAddress(opts.to)) {
       throw new Error("--to must be a valid Solana address.");
@@ -448,7 +450,7 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const token = await resolveToken(this.#datapi, opts.token);
+    const token = await resolveToken(this.#api, opts.token);
     const multiplier = await this.#rpc.getScaledUiMultiplier(token.id);
     const chainAmount =
       opts.rawAmount ??
@@ -575,6 +577,9 @@ export class SpotCommand {
     limit: string;
     offset?: string;
   }): Promise<void> {
+    if (opts.token) {
+      requireJupiterApiKey();
+    }
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -588,7 +593,7 @@ export class SpotCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
     const targetAsset = opts.token
-      ? await resolveToken(this.#datapi, opts.token)
+      ? await resolveToken(this.#api, opts.token)
       : undefined;
     const response = await this.#datapi.getUserTransactions({
       query: {
@@ -898,7 +903,11 @@ export class SpotCommand {
       if (!holdingsMints.includes(input)) {
         throw new Error(`Token ${input} not found in wallet.`);
       }
-      return resolveToken(this.#datapi, input);
+      const [token] = await getTokensByMints(this.#datapi, [input]);
+      if (!token) {
+        throw new Error(`Token ${input} not found in wallet.`);
+      }
+      return token;
     }
 
     const tokens = await getTokensByMints(this.#datapi, holdingsMints);
