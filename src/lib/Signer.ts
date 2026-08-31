@@ -96,9 +96,9 @@ export class Signer {
   }
 
   public async signTransaction(
-    transaction: Base64EncodedBytes
+    transaction: Base64EncodedBytes | Base64EncodedWireTransaction
   ): Promise<Base64EncodedWireTransaction> {
-    const txBytes = getBase64Codec().encode(transaction);
+    const txBytes = getBase64Codec().encode(transaction as Base64EncodedBytes);
     const decodedTx = getTransactionCodec().decode(txBytes);
     const signedTx = await partiallySignTransactionWithSigners(
       [this.#signer],
