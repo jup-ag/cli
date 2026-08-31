@@ -3,6 +3,7 @@ import { Command } from "commander";
 
 import { ConfigCommand } from "./commands/ConfigCommand.ts";
 import { InviteCommand } from "./commands/InviteCommand.ts";
+import { JlpCommand } from "./commands/JlpCommand.ts";
 import { KeysCommand } from "./commands/KeysCommand.ts";
 import { LendCommand } from "./commands/LendCommand.ts";
 import { PerpsCommand } from "./commands/PerpsCommand.ts";
@@ -49,6 +50,7 @@ program
 ConfigCommand.register(program);
 KeysCommand.register(program);
 InviteCommand.register(program, solanaRpc, jupiterClients.api);
+JlpCommand.register(program, jupiterClients.perps, solanaRpc);
 LendCommand.register(program, solanaRpc, jupiterClients.api);
 PerpsCommand.register(program, jupiterClients.perps, solanaRpc);
 PredictionsCommand.register(

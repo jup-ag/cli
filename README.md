@@ -46,6 +46,9 @@ jup dca create --from USDC --to SOL --amount 100 --interval 86400 --orders 10
 # Send a 10-USDC invite
 jup invite send --token USDC --amount 10
 
+# Show JLP pool statistics
+jup jlp info
+
 # Open a 3x long SOL position with 10 USDC
 jup perps open --asset SOL --side long --amount 10 --input USDC --leverage 3
 # View your perps positions
@@ -92,6 +95,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [DCA](docs/dca.md): Time-based recurring orders
 - [Invite](docs/invite.md): Jupiter Send token invites
+- [JLP](docs/jlp.md): JLP pool information, minting, and burning
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending, borrowing, and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
