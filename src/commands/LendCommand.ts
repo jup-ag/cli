@@ -150,13 +150,7 @@ export class LendCommand {
     token?: string;
   }): Promise<void> {
     requireJupiterApiKey();
-    if (opts.address && opts.key) {
-      throw new Error("Only one of --address or --key can be provided.");
-    }
-
-    const address =
-      opts.address ??
-      (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
+    const address = await this.#resolveAddress(opts);
 
     const allPositions = await this.#getPositions(address);
     let activePositions = allPositions.filter((p) => p.shares !== "0");
@@ -172,7 +166,7 @@ export class LendCommand {
 
     if (activePositions.length === 0) {
       if (Output.isJson()) {
-        Output.json({ positions: [] });
+        Output.json({ address, positions: [] });
         return;
       }
       throw new Error("No active lending positions found.");
@@ -220,10 +214,14 @@ export class LendCommand {
     });
 
     if (Output.isJson()) {
-      Output.json({ positions });
+      Output.json({ address, positions });
       return;
     }
 
+    Output.table({
+      type: "vertical",
+      rows: [{ label: "Address", value: address }],
+    });
     Output.table({
       type: "horizontal",
       headers: {
@@ -283,6 +281,7 @@ export class LendCommand {
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
+          address: signer.address,
           token: {
             id: lendToken.assetAddress,
             symbol: lendToken.asset.symbol,
@@ -300,6 +299,7 @@ export class LendCommand {
       Output.table({
         type: "vertical",
         rows: [
+          { label: "Address", value: signer.address },
           {
             label: "Deposited",
             value: `${depositedAmount} ${lendToken.asset.symbol}`,
@@ -331,6 +331,7 @@ export class LendCommand {
 
     if (Output.isJson()) {
       Output.json({
+        address: signer.address,
         token: {
           id: lendToken.assetAddress,
           symbol: lendToken.asset.symbol,
@@ -348,6 +349,7 @@ export class LendCommand {
     Output.table({
       type: "vertical",
       rows: [
+        { label: "Address", value: signer.address },
         {
           label: "Deposited",
           value: `${depositedAmount} ${lendToken.asset.symbol}`,
@@ -439,6 +441,7 @@ export class LendCommand {
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
+          address: signer.address,
           token: {
             id: lendToken.assetAddress,
             symbol: lendToken.asset.symbol,
@@ -456,6 +459,7 @@ export class LendCommand {
       Output.table({
         type: "vertical",
         rows: [
+          { label: "Address", value: signer.address },
           {
             label: "Withdrawn",
             value: `${withdrawnAmount} ${lendToken.asset.symbol}`,
@@ -487,6 +491,7 @@ export class LendCommand {
 
     if (Output.isJson()) {
       Output.json({
+        address: signer.address,
         token: {
           id: lendToken.assetAddress,
           symbol: lendToken.asset.symbol,
@@ -504,6 +509,7 @@ export class LendCommand {
     Output.table({
       type: "vertical",
       rows: [
+        { label: "Address", value: signer.address },
         {
           label: "Withdrawn",
           value: `${withdrawnAmount} ${lendToken.asset.symbol}`,

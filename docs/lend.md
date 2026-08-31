@@ -46,6 +46,7 @@ jup lend earn positions --token USDC
 ```js
 // Example JSON response:
 {
+  "address": "5vft...8Y2N", // active key wallet unless --address or --key is set
   "positions": [
     {
       "token": { "id": "EPjF...USDC", "symbol": "USDC", "decimals": 6 }, // underlying token
@@ -79,6 +80,7 @@ jup lend earn deposit --token USDC --amount 100 --dry-run
 ```js
 // Example JSON response:
 {
+  "address": "5vft...8Y2N",
   "token": { "id": "EPjF...USDC", "symbol": "USDC", "decimals": 6 },
   "depositedAmount": "100", // human-readable amount just deposited
   "depositedUsd": 100.00, // USD value of deposit
@@ -109,6 +111,7 @@ jup lend earn withdraw --token USDC --amount 50 --dry-run
 ```js
 // Example JSON response:
 {
+  "address": "5vft...8Y2N",
   "token": { "id": "EPjF...USDC", "symbol": "USDC", "decimals": 6 },
   "withdrawnAmount": "50", // human-readable amount just withdrawn
   "withdrawnUsd": 50.00, // USD value of withdrawal
