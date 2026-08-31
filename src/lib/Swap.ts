@@ -49,7 +49,7 @@ export class Swap {
       rpc.getScaledUiMultiplier(outputToken.id),
     ]);
 
-    const orderResponse = await api.ultra.get({
+    const orderResponse = await api.ultra.getUltraV1Order({
       query: {
         inputMint: inputToken.id,
         outputMint: outputToken.id,
@@ -117,7 +117,7 @@ export class Swap {
       };
     }
 
-    const executionResponse = await api.ultra.post({
+    const executionResponse = await api.ultra.postUltraV1Execute({
       body: { requestId: order.requestId, signedTransaction: signedTx },
     });
     if (executionResponse.error || !executionResponse.data) {

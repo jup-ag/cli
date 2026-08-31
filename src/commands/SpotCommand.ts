@@ -194,7 +194,7 @@ export class SpotCommand {
       this.#rpc.getScaledUiMultiplier(inputToken.id),
       this.#rpc.getScaledUiMultiplier(outputToken.id),
     ]);
-    const response = await this.#api.ultra.get({
+    const response = await this.#api.ultra.getUltraV1Order({
       query: {
         inputMint: inputToken.id,
         outputMint: outputToken.id,
@@ -389,7 +389,9 @@ export class SpotCommand {
 
     const SOL_DECIMALS = Asset.SOL.decimals;
 
-    const response = await this.#api.ultra.get3({ path: { address } });
+    const response = await this.#api.ultra.getUltraV1HoldingsAddress({
+      path: { address },
+    });
     if (response.error || !response.data) {
       throw new Error("Unable to get spot holdings.");
     }

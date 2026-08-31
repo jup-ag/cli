@@ -141,7 +141,7 @@ export class PredictionsCommand {
     let nextOffset: number | undefined;
 
     if (opts.id) {
-      const response = await this.#api.prediction.get3({
+      const response = await this.#api.prediction.getPredictionV1EventsEventId({
         path: { eventId: opts.id },
         query: { includeMarkets: true },
       });
@@ -150,7 +150,7 @@ export class PredictionsCommand {
       }
       data = [response.data];
     } else if (opts.search) {
-      const response = await this.#api.prediction.get({
+      const response = await this.#api.prediction.getPredictionV1EventsSearch({
         query: { query: opts.search, limit: Number(opts.limit) },
       });
       if (response.error || !response.data) {
@@ -164,7 +164,7 @@ export class PredictionsCommand {
 
       const { sortBy, sortDirection } = this.normalizeEventSort(opts.sort);
 
-      const response = await this.#api.prediction.get2({
+      const response = await this.#api.prediction.getPredictionV1Events({
         query: {
           includeMarkets: true,
           filter: this.normalizeEventFilter(opts.filter),
@@ -361,9 +361,10 @@ export class PredictionsCommand {
 
     let data;
     if (opts.position) {
-      const response = await this.#api.prediction.get14({
-        path: { positionPubkey: opts.position },
-      });
+      const response =
+        await this.#api.prediction.getPredictionV1PositionsPositionPubkey({
+          path: { positionPubkey: opts.position },
+        });
       if (response.error || !response.data) {
         throw new Error("Unable to get the prediction position.");
       }
@@ -372,7 +373,7 @@ export class PredictionsCommand {
       const address =
         opts.address ??
         (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
-      const response = await this.#api.prediction.get13({
+      const response = await this.#api.prediction.getPredictionV1Positions({
         query: { ownerPubkey: address },
       });
       if (response.error || !response.data) {
@@ -465,7 +466,7 @@ export class PredictionsCommand {
       token.decimals
     );
 
-    const response = await this.#api.prediction.post({
+    const response = await this.#api.prediction.postPredictionV1Orders({
       body: {
         isBuy: true,
         ownerPubkey: signer.address,
@@ -575,7 +576,7 @@ export class PredictionsCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
-    const response = await this.#api.prediction.get15({
+    const response = await this.#api.prediction.getPredictionV1History({
       query: { ownerPubkey: address, start, end },
     });
     if (response.error || !response.data) {
@@ -677,7 +678,7 @@ export class PredictionsCommand {
         simulation: await this.#rpc.simulate(signedTx),
       };
     }
-    const response = await this.#api.prediction.post2({
+    const response = await this.#api.prediction.postPredictionV1Execute({
       body: {
         signedTransaction: signedTx,
         ...("execution" in build && build.execution
@@ -714,7 +715,7 @@ export class PredictionsCommand {
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
 
     if (opts.position === "all") {
-      const response = await this.#api.prediction.delete({
+      const response = await this.#api.prediction.deletePredictionV1Positions({
         body: {
           ownerPubkey: signer.address,
           minSellPriceSlippageBps,
@@ -798,9 +799,10 @@ export class PredictionsCommand {
     }
 
     // Single position
-    const positionResponse = await this.#api.prediction.get14({
-      path: { positionPubkey: opts.position },
-    });
+    const positionResponse =
+      await this.#api.prediction.getPredictionV1PositionsPositionPubkey({
+        path: { positionPubkey: opts.position },
+      });
     if (positionResponse.error || !positionResponse.data) {
       throw new Error("Unable to get the prediction position.");
     }
@@ -808,10 +810,13 @@ export class PredictionsCommand {
     const claimable = this.isClaimable(position);
 
     if (claimable) {
-      const response = await this.#api.prediction.post3({
-        path: { positionPubkey: opts.position },
-        body: { ownerPubkey: signer.address },
-      });
+      const response =
+        await this.#api.prediction.postPredictionV1PositionsPositionPubkeyClaim(
+          {
+            path: { positionPubkey: opts.position },
+            body: { ownerPubkey: signer.address },
+          }
+        );
       if (response.error || !response.data) {
         throw new Error("Unable to build the prediction claim transaction.");
       }
@@ -886,10 +891,11 @@ export class PredictionsCommand {
         ],
       });
     } else {
-      const response = await this.#api.prediction.delete2({
-        path: { positionPubkey: opts.position },
-        body: { ownerPubkey: signer.address },
-      });
+      const response =
+        await this.#api.prediction.deletePredictionV1PositionsPositionPubkey({
+          path: { positionPubkey: opts.position },
+          body: { ownerPubkey: signer.address },
+        });
       if (response.error || !response.data) {
         throw new Error("Unable to build the prediction close transaction.");
       }

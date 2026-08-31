@@ -111,7 +111,7 @@ export async function resolveWalletAsset(
     return resolveToken(datapi, Asset[key as keyof typeof Asset].id);
   }
 
-  const response = await api.ultra.get3({
+  const response = await api.ultra.getUltraV1HoldingsAddress({
     path: { address: walletAddress },
   });
   if (response.error || !response.data) {

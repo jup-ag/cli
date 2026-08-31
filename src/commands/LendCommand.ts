@@ -258,7 +258,7 @@ export class LendCommand {
     const rawAmount =
       opts.rawAmount ??
       NumberConverter.toChainAmount(opts.amount!, lendToken.asset.decimals);
-    const response = await this.#api.lend.lend.post({
+    const response = await this.#api.lend.lend.postLendV1EarnDeposit({
       body: {
         asset: lendToken.assetAddress,
         signer: signer.address,
@@ -396,7 +396,7 @@ export class LendCommand {
           `No lending position found for ${lendToken.asset.symbol}.`
         );
       }
-      const response = await this.#api.lend.lend.post7({
+      const response = await this.#api.lend.lend.postLendV1EarnRedeem({
         body: {
           asset: lendToken.assetAddress,
           signer: signer.address,
@@ -415,7 +415,7 @@ export class LendCommand {
       withdrawnRawAmount =
         opts.rawAmount ??
         NumberConverter.toChainAmount(opts.amount!, lendToken.asset.decimals);
-      const response = await this.#api.lend.lend.post3({
+      const response = await this.#api.lend.lend.postLendV1EarnWithdraw({
         body: {
           asset: lendToken.assetAddress,
           signer: signer.address,
@@ -566,7 +566,7 @@ export class LendCommand {
   }
 
   static async #getTokens(): Promise<JupiterApiTypes.LendTokensResponse> {
-    const response = await this.#api.lend.lend.get();
+    const response = await this.#api.lend.lend.getLendV1EarnTokens();
     if (response.error || !response.data) {
       throw new Error("Unable to get Lend tokens.");
     }
@@ -576,7 +576,9 @@ export class LendCommand {
   static async #getPositions(
     users: string
   ): Promise<JupiterApiTypes.LendUserPositionsResponse> {
-    const response = await this.#api.lend.lend.get2({ query: { users } });
+    const response = await this.#api.lend.lend.getLendV1EarnPositions({
+      query: { users },
+    });
     if (response.error || !response.data) {
       throw new Error("Unable to get Lend positions.");
     }
@@ -590,7 +592,7 @@ export class LendCommand {
     user: string;
     positions: string;
   }): Promise<JupiterApiTypes.LendUserEarningsResponse[]> {
-    const response = await this.#api.lend.lend.get3({
+    const response = await this.#api.lend.lend.getLendV1EarnEarnings({
       query: { user, positions },
     });
     if (response.error || !response.data) {

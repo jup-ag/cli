@@ -14,7 +14,7 @@
         "chalk": "^5.6.2",
         "cli-table3": "^0.6.5",
         "commander": "^14.0.3",
-        "jupiter-api-ts": "^0.4.0",
+        "jupiter-api-ts": "^0.4.1",
         "ky": "^1.14.3",
         "micro-key-producer": "^0.8.5",
       },
@@ -427,7 +427,7 @@
 
     "json-bigint": ["json-bigint@1.0.0", "", { "dependencies": { "bignumber.js": "^9.0.0" } }, "sha512-SiPv/8VpZuWbvLSMtTDU8hEfrZWg/mH/nV/b4o0CYbSxu1UIQPLdwKOCIyLQX+VIPO5vrLX3i8qtqFyhdPSUSQ=="],
 
-    "jupiter-api-ts": ["jupiter-api-ts@0.4.0", "", {}, "sha512-marIqjN3Zyw4erg2HpLiQbk9f/forMYAmGXcOba6xKHe6kw2m1BYXAa9I2i9bVZsjb0lRVgdzpmwc/WsmQzT2A=="],
+    "jupiter-api-ts": ["jupiter-api-ts@0.4.1", "", {}, "sha512-U2p7GB7+neikqbCN1ZPZFis3HDLphPS9q0H5JlICjoNfk/QfoBUe+Fqbd+MIQcb/AzUtnGpIx5eNX92pxj0KxA=="],
 
     "jwa": ["jwa@2.0.1", "", { "dependencies": { "buffer-equal-constant-time": "^1.0.1", "ecdsa-sig-formatter": "1.0.11", "safe-buffer": "^5.0.1" } }, "sha512-hRF04fqJIP8Abbkq5NKGN0Bbr3JxlQ+qhZufXVr0DvujKy93ZCbXZMHDL4EOtodSbCWxOqR8MS1tXA5hwqCXDg=="],
 

@@ -85,9 +85,12 @@ export class VrfdCommand {
     if (!isAddress(opts.token)) {
       throw new Error("Invalid token mint address.");
     }
-    const response = await this.#api.tokens.v2.verification.get({
-      query: { tokenId: opts.token },
-    });
+    const response =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCheckEligibility(
+        {
+          query: { tokenId: opts.token },
+        }
+      );
     if (response.error || !response.data) {
       throw new Error("Unable to check token verification eligibility.");
     }
@@ -150,9 +153,10 @@ export class VrfdCommand {
         simulation: await this.#rpc.simulate(signedTx),
       };
     }
-    const response = await this.#api.tokens.v2.verification.post({
-      body: { ...req, transaction: signedTx },
-    });
+    const response =
+      await this.#api.tokens.v2.verification.postTokensV2VerifyExpressExecute({
+        body: { ...req, transaction: signedTx },
+      });
     if (response.error || !response.data) {
       throw new Error("Unable to execute the verification transaction.");
     }
@@ -193,9 +197,12 @@ export class VrfdCommand {
     }
 
     // Check eligibility before crafting transaction
-    const eligibilityResponse = await this.#api.tokens.v2.verification.get({
-      query: { tokenId: opts.token },
-    });
+    const eligibilityResponse =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCheckEligibility(
+        {
+          query: { tokenId: opts.token },
+        }
+      );
     if (eligibilityResponse.error || !eligibilityResponse.data) {
       throw new Error("Unable to check token verification eligibility.");
     }
@@ -225,9 +232,10 @@ export class VrfdCommand {
     }
 
     // Craft the payment transaction
-    const craftResponse = await this.#api.tokens.v2.verification.get2({
-      query: { senderAddress: signer.address },
-    });
+    const craftResponse =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCraftTxn({
+        query: { senderAddress: signer.address },
+      });
     if (craftResponse.error || !craftResponse.data) {
       throw new Error("Unable to build the verification transaction.");
     }
