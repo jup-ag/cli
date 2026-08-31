@@ -51,6 +51,10 @@ jup lend earn tokens
 jup lend earn deposit --token USDC --amount 100
 # View your lending positions
 jup lend earn positions
+# View borrow vaults
+jup lend borrow vaults
+# Deposit collateral and borrow in one transaction
+jup lend borrow operate --vault 1 --collateral 0.03 --debt 1.1
 
 # Browse prediction markets
 jup predictions events --category crypto
@@ -81,7 +85,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 - [Sign](docs/sign.md): Sign an externally supplied transaction
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
-- [Lend](docs/lend.md): Lending and yield farming
+- [Lend](docs/lend.md): Lending, borrowing, and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
 - [Vrfd](docs/vrfd.md): Token verification
 

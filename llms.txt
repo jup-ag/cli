@@ -15,6 +15,6 @@ On failure, commands exit with non-zero code with an error message. In JSON mode
 - [Sign](docs/sign.md): Sign transactions from `--dry-run`
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
-- [Lend](docs/lend.md): Lending and yield farming
+- [Lend](docs/lend.md): Lending, borrowing, and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
 - [Vrfd](docs/vrfd.md): Token verification

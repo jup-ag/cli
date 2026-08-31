@@ -10,6 +10,12 @@ import { Signer } from "../lib/Signer.ts";
 import type { SolanaRpc } from "../lib/SolanaRpc.ts";
 
 type LendToken = JupiterApiTypes.LendTokenInfo;
+type BorrowVault = JupiterApiTypes.LendBorrowBorrowVault;
+type BorrowPosition = JupiterApiTypes.LendBorrowBorrowPosition;
+type BorrowToken = JupiterApiTypes.LendBorrowToken;
+type BorrowMarket = JupiterApiTypes.LendBorrowMarket;
+
+const MIN_I128 = "-170141183460469231731687303715884105728";
 
 type LendTransactionSubmission = {
   serializedTransaction: string;
@@ -33,7 +39,7 @@ export class LendCommand {
     this.#api = api;
     const lend = program
       .command("lend")
-      .description("Lending and earning yield");
+      .description("Lending, borrowing, and earning yield");
     const earn = lend
       .command("earn")
       .description("Earn yield by lending tokens");
@@ -83,6 +89,48 @@ export class LendCommand {
       .action((opts) => {
         Config.dryRun = Config.resolveDryRun(opts.dryRun);
         return this.withdraw(opts);
+      });
+    const borrow = lend
+      .command("borrow")
+      .description("Borrow against collateral");
+    borrow
+      .command("vaults")
+      .description("View borrow vaults with LTV and rates")
+      .option("--market <market>", "Borrow market (main or ethena)", "main")
+      .action((opts) => this.borrowVaults(opts));
+    borrow
+      .command("positions")
+      .description("View borrow positions")
+      .option("--key <name>", "Key to use (overrides active key)")
+      .option("--address <address>", "Wallet address to look up")
+      .option("--vault <id>", "Filter by vault ID")
+      .option("--market <market>", "Borrow market (main or ethena)", "main")
+      .action((opts) => this.borrowPositions(opts));
+    borrow
+      .command("operate")
+      .description("Deposit, borrow, repay, or withdraw in one transaction")
+      .requiredOption("--vault <id>", "Vault ID from `lend borrow vaults`")
+      .option(
+        "--position <id>",
+        "Position NFT ID (0 creates a new position)",
+        "0"
+      )
+      .option(
+        "--collateral <amount>",
+        "Collateral delta (positive deposits, negative withdraws, or 'all')"
+      )
+      .option(
+        "--debt <amount>",
+        "Debt delta (positive borrows, negative repays, or 'all')"
+      )
+      .option("--raw-collateral <n>", "Collateral delta in on-chain units")
+      .option("--raw-debt <n>", "Debt delta in on-chain units")
+      .option("--market <market>", "Borrow market (main or ethena)", "main")
+      .option("--key <name>", "Key to use for signing")
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.borrowOperate(opts);
       });
   }
 
@@ -643,6 +691,510 @@ export class LendCommand {
       serializedTransaction,
       signature: await this.#rpc.send(serializedTransaction),
     };
+  }
+
+  private static async borrowVaults(opts: { market?: string }): Promise<void> {
+    requireJupiterApiKey();
+    const market = this.#parseMarket(opts.market);
+    const vaults = await this.#getBorrowVaults(market);
+    const rows = vaults.map((vault) => this.#mapBorrowVault(vault));
+
+    if (Output.isJson()) {
+      Output.json({ market, vaults: rows });
+      return;
+    }
+
+    Output.table({
+      type: "horizontal",
+      headers: {
+        vault: "Vault",
+        pair: "Pair",
+        ltv: "LTV",
+        borrowApy: "Borrow APY",
+        borrowable: "Borrowable",
+      },
+      rows: rows.map((vault) => ({
+        vault: String(vault.vaultId),
+        pair: `${vault.supplyToken.symbol}/${vault.borrowToken.symbol}`,
+        ltv: this.#formatPct(vault.ltvPct),
+        borrowApy: Output.formatPercentageChange(
+          vault.borrowApyPct ?? undefined
+        ),
+        borrowable: Output.formatDollar(vault.borrowableUsd),
+      })),
+    });
+  }
+
+  private static async borrowPositions(opts: {
+    key?: string;
+    address?: string;
+    vault?: string;
+    market?: string;
+  }): Promise<void> {
+    requireJupiterApiKey();
+    const market = this.#parseMarket(opts.market);
+    const address = await this.#resolveAddress(opts);
+
+    let positions = (await this.#getBorrowPositions(address, market)).filter(
+      (position) =>
+        position.supply !== "0" ||
+        position.borrow !== "0" ||
+        position.dustBorrow !== "0"
+    );
+
+    if (opts.vault) {
+      const vaultId = this.#parseVaultId(opts.vault);
+      positions = positions.filter((position) => position.vaultId === vaultId);
+    }
+
+    if (positions.length === 0) {
+      if (Output.isJson()) {
+        Output.json({ address, market, positions: [] });
+        return;
+      }
+      throw new Error("No active borrow positions found.");
+    }
+
+    const rows = positions.map((position) => this.#mapBorrowPosition(position));
+
+    if (Output.isJson()) {
+      Output.json({ address, market, positions: rows });
+      return;
+    }
+
+    Output.table({
+      type: "vertical",
+      rows: [{ label: "Address", value: address }],
+    });
+    Output.table({
+      type: "horizontal",
+      headers: {
+        position: "Position",
+        vault: "Vault",
+        collateral: "Collateral",
+        debt: "Debt",
+        ltv: "LTV",
+      },
+      rows: rows.map((position) => ({
+        position: String(position.positionId),
+        vault: String(position.vaultId),
+        collateral: this.#formatTokenValue(
+          position.collateralAmount,
+          position.supplyToken.symbol,
+          position.collateralUsd
+        ),
+        debt: this.#formatTokenValue(
+          position.debtAmount,
+          position.borrowToken.symbol,
+          position.debtUsd
+        ),
+        ltv: this.#formatPct(position.ltvPct),
+      })),
+    });
+  }
+
+  private static async borrowOperate(opts: {
+    vault: string;
+    position?: string;
+    collateral?: string;
+    debt?: string;
+    rawCollateral?: string;
+    rawDebt?: string;
+    market?: string;
+    key?: string;
+  }): Promise<void> {
+    requireJupiterApiKey();
+    this.#validateOperateAmountOpts(opts);
+
+    const market = this.#parseMarket(opts.market);
+    const vaultId = this.#parseVaultId(opts.vault);
+    const positionId = this.#parsePositionId(opts.position ?? "0");
+    const vault = (await this.#getBorrowVaults(market)).find(
+      (candidate) => candidate.id === vaultId
+    );
+    if (!vault) {
+      throw new Error(
+        `Vault ${vaultId} was not found in the ${market} market.`
+      );
+    }
+
+    const settings = Config.load();
+    const signer = await Signer.load(opts.key ?? settings.activeKey);
+    const colAmount = this.#resolveOperateAmount(
+      opts.collateral,
+      opts.rawCollateral,
+      vault.supplyToken.decimals,
+      "collateral"
+    );
+    const debtAmount = this.#resolveOperateAmount(
+      opts.debt,
+      opts.rawDebt,
+      vault.borrowToken.decimals,
+      "debt"
+    );
+
+    const response = await this.#api.lend.borrow.buildBorrowOperateTransaction({
+      body: {
+        vaultId,
+        positionId,
+        signer: signer.address,
+        colAmount,
+        debtAmount,
+      },
+      query: { market },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to build the Lend borrow transaction.");
+    }
+
+    const nftId = response.data.nftId;
+    const supplyToken = this.#borrowToken(vault.supplyToken);
+    const borrowToken = this.#borrowToken(vault.borrowToken);
+    const collateralDelta = this.#formatOperateDelta(
+      colAmount,
+      vault.supplyToken.decimals
+    );
+    const debtDelta = this.#formatOperateDelta(
+      debtAmount,
+      vault.borrowToken.decimals
+    );
+    const submission = await this.#submitTransaction(
+      signer,
+      response.data.transaction
+    );
+
+    if (Config.dryRun) {
+      if (Output.isJson()) {
+        Output.json({
+          dryRun: true,
+          address: signer.address,
+          market,
+          vaultId,
+          positionId: nftId,
+          supplyToken,
+          borrowToken,
+          collateralDelta,
+          debtDelta,
+          serializedTransaction: submission.serializedTransaction,
+          simulation: submission.simulation!,
+        });
+        return;
+      }
+
+      console.log(Output.DRY_RUN_LABEL);
+      Output.table({
+        type: "vertical",
+        rows: [
+          { label: "Address", value: signer.address },
+          { label: "Market", value: market },
+          { label: "Vault", value: String(vaultId) },
+          { label: "Position", value: String(nftId) },
+          {
+            label: "Collateral",
+            value: `${collateralDelta} ${supplyToken.symbol}`,
+          },
+          {
+            label: "Debt",
+            value: `${debtDelta} ${borrowToken.symbol}`,
+          },
+          {
+            label: "Serialized Transaction",
+            value: submission.serializedTransaction,
+          },
+          {
+            label: "Simulation",
+            value: submission.simulation!.success ? "Passed" : "Failed",
+          },
+          ...(submission.simulation!.error
+            ? [{ label: "Error", value: submission.simulation!.error }]
+            : []),
+        ],
+      });
+      return;
+    }
+
+    const current = await this.#fetchBorrowPosition(
+      signer.address,
+      nftId,
+      market
+    );
+
+    if (Output.isJson()) {
+      Output.json({
+        address: signer.address,
+        market,
+        vaultId,
+        positionId: nftId,
+        supplyToken,
+        borrowToken,
+        collateralDelta,
+        debtDelta,
+        collateralAmount: current?.collateralAmount ?? 0,
+        collateralUsd: current?.collateralUsd ?? 0,
+        debtAmount: current?.debtAmount ?? 0,
+        debtUsd: current?.debtUsd ?? 0,
+        ltvPct: current?.ltvPct ?? null,
+        signature: submission.signature!,
+      });
+      return;
+    }
+
+    Output.table({
+      type: "vertical",
+      rows: [
+        { label: "Address", value: signer.address },
+        { label: "Market", value: market },
+        { label: "Vault", value: String(vaultId) },
+        { label: "Position", value: String(nftId) },
+        {
+          label: "Collateral",
+          value: `${collateralDelta} ${supplyToken.symbol}`,
+        },
+        {
+          label: "Debt",
+          value: `${debtDelta} ${borrowToken.symbol}`,
+        },
+        {
+          label: "Position Collateral",
+          value: current
+            ? this.#formatTokenValue(
+                current.collateralAmount,
+                supplyToken.symbol,
+                current.collateralUsd
+              )
+            : "0",
+        },
+        {
+          label: "Position Debt",
+          value: current
+            ? this.#formatTokenValue(
+                current.debtAmount,
+                borrowToken.symbol,
+                current.debtUsd
+              )
+            : "0",
+        },
+        { label: "Tx Signature", value: submission.signature! },
+      ],
+    });
+  }
+
+  static async #getBorrowVaults(market: BorrowMarket): Promise<BorrowVault[]> {
+    const response = await this.#api.lend.borrow.listBorrowVaults({
+      query: { market },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get borrow vaults.");
+    }
+    return response.data;
+  }
+
+  static async #getBorrowPositions(
+    users: string,
+    market: BorrowMarket
+  ): Promise<BorrowPosition[]> {
+    const response = await this.#api.lend.borrow.listBorrowPositions({
+      query: { users, market },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get borrow positions.");
+    }
+    return response.data;
+  }
+
+  static async #fetchBorrowPosition(
+    address: string,
+    positionId: number,
+    market: BorrowMarket
+  ) {
+    const positions = await this.#getBorrowPositions(address, market);
+    const position = positions.find((candidate) => candidate.id === positionId);
+    return position ? this.#mapBorrowPosition(position) : null;
+  }
+
+  static #mapBorrowVault(vault: BorrowVault) {
+    const supply = this.#tokenUsd(vault.totalSupply, vault.supplyToken);
+    const borrow = this.#tokenUsd(vault.totalBorrow, vault.borrowToken);
+    const borrowable = this.#tokenUsd(vault.borrowable, vault.borrowToken);
+    const withdrawable = this.#tokenUsd(vault.withdrawable, vault.supplyToken);
+    return {
+      vaultId: vault.id,
+      address: vault.address,
+      supplyToken: this.#borrowToken(vault.supplyToken),
+      borrowToken: this.#borrowToken(vault.borrowToken),
+      ltvPct: this.#factorToPct(vault.collateralFactor),
+      liquidationThresholdPct: this.#factorToPct(vault.liquidationThreshold),
+      supplyApyPct: vault.supplyRate ? this.rateToPct(vault.supplyRate) : null,
+      borrowApyPct: vault.borrowRate ? this.rateToPct(vault.borrowRate) : null,
+      totalSupplyUsd: supply.usd,
+      totalBorrowUsd: borrow.usd,
+      borrowableUsd: borrowable.usd,
+      withdrawableUsd: withdrawable.usd,
+      minimumBorrowingAmount: Number(
+        NumberConverter.fromChainAmount(
+          vault.minimumBorrowing ?? "0",
+          vault.borrowToken.decimals
+        )
+      ),
+      totalPositions: vault.totalPositions ?? null,
+    };
+  }
+
+  static #mapBorrowPosition(position: BorrowPosition) {
+    const vault = position.vault;
+    const debtRaw =
+      position.dustBorrow && position.dustBorrow !== "0"
+        ? position.dustBorrow
+        : position.borrow;
+    const collateral = this.#tokenUsd(position.supply, vault.supplyToken);
+    const debt = this.#tokenUsd(debtRaw, vault.borrowToken);
+    return {
+      positionId: position.id,
+      positionPubkey: position.address,
+      vaultId: position.vaultId,
+      supplyToken: this.#borrowToken(vault.supplyToken),
+      borrowToken: this.#borrowToken(vault.borrowToken),
+      collateralAmount: collateral.amount,
+      collateralUsd: collateral.usd,
+      debtAmount: debt.amount,
+      debtUsd: debt.usd,
+      ltvPct: collateral.usd > 0 ? (debt.usd / collateral.usd) * 100 : null,
+      isLiquidated: position.isLiquidated,
+    };
+  }
+
+  static #borrowToken(token: BorrowToken): {
+    id: string;
+    symbol: string;
+    decimals: number;
+  } {
+    return {
+      id: token.address,
+      symbol: token.uiSymbol || token.symbol,
+      decimals: token.decimals,
+    };
+  }
+
+  static #tokenUsd(
+    amount: string | undefined,
+    token: BorrowToken
+  ): { amount: number; usd: number } {
+    const human = Number(
+      NumberConverter.fromChainAmount(amount ?? "0", token.decimals)
+    );
+    return { amount: human, usd: human * Number(token.price) };
+  }
+
+  static async #resolveAddress(opts: {
+    key?: string;
+    address?: string;
+  }): Promise<string> {
+    if (opts.address && opts.key) {
+      throw new Error("Only one of --address or --key can be provided.");
+    }
+    return (
+      opts.address ??
+      (await Signer.loadAddress(opts.key ?? Config.load().activeKey))
+    );
+  }
+
+  static #parseMarket(value?: string): BorrowMarket {
+    const market = (value ?? "main").toLowerCase();
+    if (market !== "main" && market !== "ethena") {
+      throw new Error("Invalid --market. Must be main or ethena.");
+    }
+    return market;
+  }
+
+  static #parseVaultId(value: string): number {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) {
+      throw new Error("Invalid --vault. Must be a positive integer.");
+    }
+    return id;
+  }
+
+  static #parsePositionId(value: string): number {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id < 0) {
+      throw new Error("Invalid --position. Must be a non-negative integer.");
+    }
+    return id;
+  }
+
+  static #validateOperateAmountOpts(opts: {
+    collateral?: string;
+    debt?: string;
+    rawCollateral?: string;
+    rawDebt?: string;
+  }): void {
+    if (
+      !opts.collateral &&
+      !opts.debt &&
+      !opts.rawCollateral &&
+      !opts.rawDebt
+    ) {
+      throw new Error(
+        "Provide --collateral, --debt, --raw-collateral, or --raw-debt."
+      );
+    }
+  }
+
+  static #resolveOperateAmount(
+    human: string | undefined,
+    raw: string | undefined,
+    decimals: number,
+    kind: "collateral" | "debt"
+  ): string {
+    if (human && raw) {
+      throw new Error(
+        `Only one of --${kind} or --raw-${kind} can be provided.`
+      );
+    }
+    if (!human && !raw) {
+      return "0";
+    }
+    if (raw) {
+      return raw;
+    }
+    if (human!.toLowerCase() === "all") {
+      return MIN_I128;
+    }
+    return NumberConverter.toChainAmount(human!, decimals);
+  }
+
+  static #formatOperateDelta(raw: string, decimals: number): string {
+    if (raw === MIN_I128) {
+      return "all";
+    }
+    return NumberConverter.fromChainAmount(raw, decimals);
+  }
+
+  static #formatTokenValue(
+    amount: number,
+    symbol: string,
+    usd: number
+  ): string {
+    return `${amount.toLocaleString("en-US", {
+      maximumFractionDigits: 6,
+    })} ${symbol} (${Output.formatDollar(usd)})`;
+  }
+
+  static #formatPct(value: number | null): string {
+    if (value === null) {
+      return "\u2014";
+    }
+    return `${value.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}%`;
+  }
+
+  static #factorToPct(factor: string | undefined): number | null {
+    if (factor === undefined) {
+      return null;
+    }
+    return Number(factor) / 10;
   }
 
   private static rateToPct(rate: string): number {

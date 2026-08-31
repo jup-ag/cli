@@ -30,11 +30,11 @@ bun run ci
 
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
-- `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
+- `LendCommand` — `lend earn tokens/positions/deposit/withdraw`, `lend borrow vaults/positions/operate`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
 - `PredictionsCommand` — `predictions events/positions/open/close/history`
 - `SignCommand` — `sign --tx <base64>`
-- `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
+- `SpotCommand` — `spot tokens/quote/swap/history`, `portfolio`, `transfer`, `reclaim`
 - `UpdateCommand` — `update` (self-update CLI to latest version)
 - `VrfdCommand` — `vrfd check/submit`
 
@@ -62,6 +62,8 @@ bun run ci
 **Perps flow:** PerpsClient.post* → Signer.signTransaction → PerpsClient.postExecute
 
 **Lend deposit/withdraw flow:** LendClient.getTokens → resolve jlToken → Swap.execute → LendClient.getPositions (updated state)
+
+**Lend borrow flow:** listBorrowVaults / listBorrowPositions → buildBorrowOperateTransaction → Signer.signTransaction → RPC send
 
 **Predictions flow:** PredictionsClient.postOrder → Signer.signTransaction → PredictionsClient.postExecute
 
