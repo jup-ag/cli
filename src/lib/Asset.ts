@@ -88,13 +88,33 @@ export async function getTokensByMints(
 
 export async function resolveToken(
   api: JupiterApi,
-  input: string
-): Promise<Token> {
-  const [token] = await searchTokens({ api, query: input, limit: 1 });
-  if (!token) {
-    throw new Error(`Token not found: ${input}`);
+  queries: string[]
+): Promise<Token[]> {
+  if (queries.length === 0) {
+    throw new Error("Token not found.");
   }
-  return token;
+
+  const tokens = await searchTokens({
+    api,
+    query: queries.join(","),
+    ...(queries.length === 1 ? { limit: 1 } : {}),
+  });
+
+  return queries.map((query) => {
+    const token = queries.length === 1 ? tokens[0] : matchToken(tokens, query);
+    if (!token) {
+      throw new Error(`Token not found: ${query}`);
+    }
+    return token;
+  });
+}
+
+function matchToken(tokens: Token[], query: string): Token | undefined {
+  const lower = query.toLowerCase();
+  return (
+    tokens.find((token) => token.id === query) ??
+    tokens.find((token) => token.symbol.toLowerCase() === lower)
+  );
 }
 
 export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {

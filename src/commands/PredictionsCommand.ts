@@ -451,7 +451,7 @@ export class PredictionsCommand {
     const side = this.normalizeSide(opts.side);
     const isYes = side === "yes";
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const token = await resolveToken(this.#api, opts.input);
+    const token = (await resolveToken(this.#api, [opts.input]))[0]!;
     const depositAmount = NumberConverter.toChainAmount(
       opts.amount,
       token.decimals

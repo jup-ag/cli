@@ -188,10 +188,9 @@ export class SpotCommand {
     requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
-    const [inputToken, outputToken] = await Promise.all([
-      resolveToken(this.#api, opts.from),
-      resolveToken(this.#api, opts.to),
-    ]);
+    const resolved = await resolveToken(this.#api, [opts.from, opts.to]);
+    const inputToken = this.requireToken(resolved[0], opts.from);
+    const outputToken = this.requireToken(resolved[1], opts.to);
     const [inputMultiplier, outputMultiplier] = await Promise.all([
       this.#rpc.getScaledUiMultiplier(inputToken.id),
       this.#rpc.getScaledUiMultiplier(outputToken.id),
@@ -288,10 +287,9 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const [inputToken, outputToken] = await Promise.all([
-      resolveToken(this.#api, opts.from),
-      resolveToken(this.#api, opts.to),
-    ]);
+    const resolved = await resolveToken(this.#api, [opts.from, opts.to]);
+    const inputToken = this.requireToken(resolved[0], opts.from);
+    const outputToken = this.requireToken(resolved[1], opts.to);
 
     const swap = await Swap.execute({
       signer,
@@ -450,7 +448,10 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const token = await resolveToken(this.#api, opts.token);
+    const token = this.requireToken(
+      (await resolveToken(this.#api, [opts.token]))[0],
+      opts.token
+    );
     const multiplier = await this.#rpc.getScaledUiMultiplier(token.id);
     const chainAmount =
       opts.rawAmount ??
@@ -593,7 +594,10 @@ export class SpotCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
     const targetAsset = opts.token
-      ? await resolveToken(this.#api, opts.token)
+      ? this.requireToken(
+          (await resolveToken(this.#api, [opts.token]))[0],
+          opts.token
+        )
       : undefined;
     const response = await this.#datapi.getUserTransactions({
       query: {
@@ -924,6 +928,13 @@ export class SpotCommand {
     throw new Error(
       `Multiple tokens matching "${input}" found in wallet. Use the mint address instead:\n${options}`
     );
+  }
+
+  private static requireToken(token: Token | undefined, query: string): Token {
+    if (!token) {
+      throw new Error(`Token not found: ${query}`);
+    }
+    return token;
   }
 
   private static parseTimestamp(value: string): number {
