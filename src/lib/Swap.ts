@@ -9,8 +9,8 @@ import type { SolanaRpc } from "./SolanaRpc.ts";
 
 export type SwapResult = {
   signer: Signer;
-  order: JupiterApiTypes.GetUltraV1OrderResponse;
-  result: JupiterApiTypes.PostUltraV1ExecuteResponse | null;
+  order: JupiterApiTypes.GetSwapV2OrderResponse;
+  result: JupiterApiTypes.PostSwapV2ExecuteResponse | null;
   inputToken: Token;
   outputToken: Token;
   inAmount: string;
@@ -49,7 +49,7 @@ export class Swap {
       rpc.getScaledUiMultiplier(outputToken.id),
     ]);
 
-    const orderResponse = await api.ultra.getUltraV1Order({
+    const orderResponse = await api.swap.v2.getOrder({
       query: {
         inputMint: inputToken.id,
         outputMint: outputToken.id,
@@ -61,13 +61,14 @@ export class Swap {
             inputMultiplier
           ),
         taker: signer.address,
+        ...(opts.slippageBps ? { slippageBps: Number(opts.slippageBps) } : {}),
       },
     });
     if (orderResponse.error || !orderResponse.data) {
       throw new Error("Unable to get a swap order.");
     }
     const order = orderResponse.data;
-    if (!order.transaction) {
+    if (!order.transaction || !order.inAmount || !order.outAmount) {
       throw new Error(order.errorMessage ?? "No valid routes found.");
     }
 
@@ -76,16 +77,16 @@ export class Swap {
       order.prioritizationFeePayer === signer.address &&
       order.prioritizationFeeLamports
     ) {
-      networkFeeLamports = order.prioritizationFeeLamports;
+      networkFeeLamports = Number(order.prioritizationFeeLamports);
     }
     if (order.rentFeePayer === signer.address && order.rentFeeLamports) {
-      networkFeeLamports += order.rentFeeLamports;
+      networkFeeLamports += Number(order.rentFeeLamports);
     }
     if (
       order.signatureFeePayer === signer.address &&
       order.signatureFeeLamports
     ) {
-      networkFeeLamports += order.signatureFeeLamports;
+      networkFeeLamports += Number(order.signatureFeeLamports);
     }
 
     const signedTx = await signer.signTransaction(
@@ -117,8 +118,18 @@ export class Swap {
       };
     }
 
-    const executionResponse = await api.ultra.postUltraV1Execute({
-      body: { requestId: order.requestId, signedTransaction: signedTx },
+    if (!order.requestId) {
+      throw new Error("Swap order did not include a request ID.");
+    }
+
+    const executionResponse = await api.swap.v2.postExecute({
+      body: {
+        requestId: order.requestId,
+        ...(order.lastValidBlockHeight
+          ? { lastValidBlockHeight: order.lastValidBlockHeight }
+          : {}),
+        signedTransaction: signedTx,
+      },
     });
     if (executionResponse.error || !executionResponse.data) {
       throw new Error("Unable to execute the swap.");

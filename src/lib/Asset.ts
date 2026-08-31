@@ -1,9 +1,5 @@
-import { address, isAddress } from "@solana/kit";
-import type {
-  JupiterApi,
-  JupiterDatapi,
-  JupiterDatapiTypes,
-} from "jupiter-api-ts";
+import { address } from "@solana/kit";
+import type { JupiterDatapi, JupiterDatapiTypes } from "jupiter-api-ts";
 
 type AssetInfo = {
   readonly id: ReturnType<typeof address>;
@@ -93,47 +89,4 @@ export function resolveAsset(name: string): (typeof Asset)[keyof typeof Asset] {
     throw new Error(`Unknown asset: ${name}`);
   }
   return asset;
-}
-
-export async function resolveWalletAsset(
-  api: JupiterApi,
-  datapi: JupiterDatapi,
-  walletAddress: string,
-  asset: string
-): Promise<Token> {
-  if (isAddress(asset)) {
-    return resolveToken(datapi, asset);
-  }
-
-  const key = asset.toUpperCase();
-  // Prevent full holdings lookup for well-known tokens
-  if (key in Asset) {
-    return resolveToken(datapi, Asset[key as keyof typeof Asset].id);
-  }
-
-  const response = await api.ultra.getUltraV1HoldingsAddress({
-    path: { address: walletAddress },
-  });
-  if (response.error || !response.data) {
-    throw new Error("Unable to get wallet holdings.");
-  }
-  const holdings = response.data;
-  const mints = Object.keys(holdings.tokens);
-  if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
-    mints.push(Asset.SOL.id);
-  }
-  const tokens = await getTokensByMints(datapi, mints);
-  const query = asset.toLowerCase();
-  const matches = tokens.filter((t) => t.symbol.toLowerCase() === query);
-
-  if (matches.length === 0) {
-    throw new Error(`Token "${asset}" not found in wallet.`);
-  }
-  if (matches.length === 1) {
-    return matches[0]!;
-  }
-  const options = matches.map((t) => `  - ${t.symbol} (${t.id})`).join("\n");
-  throw new Error(
-    `Multiple tokens matching "${asset}" found in wallet. Use the mint address instead:\n${options}`
-  );
 }

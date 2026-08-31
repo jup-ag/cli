@@ -9,10 +9,8 @@ Anywhere a token is specified (`--from`, `--to`, `--token`, `--search`), you can
 - **Symbol** (e.g. `SOL`, `USDC`, `JUP`) — the CLI auto-resolves to the best-matching token
 - **Mint address** (e.g. `So11111111111111111111111111111111111111112`) — exact match
 
-Token resolution depends on the context:
-
-- **Wallet-bound options** (`swap --from`, `transfer --token`, `reclaim --token`) resolve against the tokens in your wallet. This ensures the CLI matches the token you actually hold, not a different token with the same symbol. If the token is not found in your wallet, the command errors. If multiple tokens share the same symbol, the CLI asks you to use the mint address instead.
-- **All other options** (`swap --to`, `quote --from`, `quote --to`, `tokens --search`, `history --token`) resolve via Jupiter's global token search, picking the top result.
+Token arguments resolve through Jupiter's global token search, which picks the top
+result. Use a mint address whenever a symbol might be ambiguous.
 
 ## Commands
 
@@ -59,7 +57,7 @@ jup spot swap --from SOL --to USDC --amount 1 --dry-run
 ```
 
 - `--key` overrides the active key for this transaction
-- `--slippage` sets max slippage in basis points (e.g. `50` = 0.5%). Recommended to be emtpy: Jupiter's Real-Time Slippage Estimation (RTSE) automatically picks an optimal value.
+- `--slippage` sets max slippage in basis points (e.g. `50` = 0.5%). Omit it to use Jupiter's default.
 - `--dry-run` previews the swap without signing or submitting. The API still simulates the transaction, so errors like insufficient balance are caught. In JSON mode, the response includes the unsigned base64 `transaction` for external signing.
 
 ```js
@@ -81,29 +79,23 @@ jup spot swap --from SOL --to USDC --amount 1 --dry-run
 ### View portfolio
 
 ```bash
-jup spot portfolio
-jup spot portfolio --key mykey
-jup spot portfolio --address <wallet-address>
+jup portfolio
+jup portfolio --key mykey
+jup portfolio --address <wallet-address>
 ```
 
 - With no options, uses the active key's wallet
-- `--address` looks up any wallet without needing a key
+- `--address` looks up any wallet without needing a signing key; the Portfolio API still requires a Jupiter API key
 
 ```js
 // Example JSON response:
 {
   "totalValue": 1250.50, // total USD net worth
-  "tokens": [
+  "positions": [
     {
-      "id": "So11...1112", // mint address
-      "symbol": "SOL",
-      "decimals": 9,
-      "amount": 10.5, // human-readable decimal balance
-      "rawAmount": "10500000000", // on-chain integer balance
-      "value": 892.50, // USD value of holdings
-      "price": 85.00, // current token USD price
-      "priceChange": 0.032, // 24h price change; 0.032 means 3.2%
-      "isVerified": true
+      "platformId": "wallet",
+      "label": "Wallet",
+      "value": 892.50
     }
   ]
 }
@@ -112,10 +104,10 @@ jup spot portfolio --address <wallet-address>
 ### Reclaim rent from token accounts
 
 ```bash
-jup spot reclaim
-jup spot reclaim --key mykey
-jup spot reclaim --token USDC
-jup spot reclaim --dry-run
+jup reclaim
+jup reclaim --key mykey
+jup reclaim --token USDC
+jup reclaim --dry-run
 ```
 
 - With no options, reclaims rent from every empty, non-frozen token account owned by the active key's wallet
@@ -170,11 +162,11 @@ jup spot history --address <wallet-address> --limit 10 --offset 123
 ### Transfer tokens
 
 ```bash
-jup spot transfer --token SOL --to <recipient-address> --amount 1
-jup spot transfer --token USDC --to <recipient-address> --amount 50
-jup spot transfer --token <mint> --to <recipient-address> --raw-amount 1000000000
-jup spot transfer --token SOL --to <recipient-address> --amount 1 --key mykey
-jup spot transfer --token SOL --to <recipient-address> --amount 1 --dry-run
+jup transfer --token SOL --to <recipient-address> --amount 1
+jup transfer --token USDC --to <recipient-address> --amount 50
+jup transfer --token <mint> --to <recipient-address> --raw-amount 1000000000
+jup transfer --token SOL --to <recipient-address> --amount 1 --key mykey
+jup transfer --token SOL --to <recipient-address> --amount 1 --dry-run
 ```
 
 - Works with both SOL and any SPL token. The CLI builds the System Program or SPL Token transaction locally and sends it through the configured RPC URL.
@@ -212,6 +204,6 @@ jup spot tokens --search <mint-address>
 ### Check holdings then transfer
 
 ```bash
-jup spot portfolio
-jup spot transfer --token USDC --to <recipient-address> --amount 50
+jup portfolio
+jup transfer --token USDC --to <recipient-address> --amount 50
 ```

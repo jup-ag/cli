@@ -6,7 +6,7 @@ import type {
   JupiterApiTypes,
   JupiterDatapi,
 } from "jupiter-api-ts";
-import { resolveWalletAsset } from "../lib/Asset.ts";
+import { resolveToken } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
 import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
@@ -455,12 +455,7 @@ export class PredictionsCommand {
     const side = this.normalizeSide(opts.side);
     const isYes = side === "yes";
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const token = await resolveWalletAsset(
-      this.#api,
-      this.#datapi,
-      signer.address,
-      opts.input
-    );
+    const token = await resolveToken(this.#datapi, opts.input);
     const depositAmount = NumberConverter.toChainAmount(
       opts.amount,
       token.decimals

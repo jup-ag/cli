@@ -4,19 +4,16 @@ import {
   type Address,
   type Base64EncodedWireTransaction,
 } from "@solana/kit";
+import { TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import { TOKEN_2022_PROGRAM_ADDRESS } from "@solana-program/token-2022";
 import chalk from "chalk";
 import type { Command } from "commander";
-import type {
-  JupiterApi,
-  JupiterDatapi,
-  JupiterApiTypes,
-} from "jupiter-api-ts";
+import type { JupiterApi, JupiterDatapi } from "jupiter-api-ts";
 
 import {
   Asset,
   getTokensByMints,
   resolveToken,
-  resolveWalletAsset,
   searchTokens,
   type Token,
 } from "../lib/Asset.ts";
@@ -49,7 +46,7 @@ export class SpotCommand {
     this.#api = api;
     const spot = program
       .command("spot")
-      .description("Swaps, transfers, token and portfolio data");
+      .description("Swaps, token discovery, and trade history");
     spot
       .command("tokens")
       .description("Search for tokens by symbol or mint address")
@@ -90,9 +87,9 @@ export class SpotCommand {
         Config.dryRun = Config.resolveDryRun(opts.dryRun);
         return this.swap(opts);
       });
-    spot
+    program
       .command("portfolio")
-      .description("Show spot portfolio for a wallet")
+      .description("Show portfolio positions for a wallet")
       .option("--address <address>", "Wallet address to look up")
       .option("--key <name>", "Key to use (overrides active key)")
       .action((opts) => this.portfolio(opts));
@@ -110,7 +107,7 @@ export class SpotCommand {
       .option("--limit <n>", "Max number of results (max: 15)", "10")
       .option("--offset <offset>", "Pagination offset for next page of results")
       .action((opts) => this.history(opts));
-    spot
+    program
       .command("transfer")
       .description("Transfer tokens to another wallet")
       .requiredOption(
@@ -129,7 +126,7 @@ export class SpotCommand {
         Config.dryRun = Config.resolveDryRun(opts.dryRun);
         return this.transfer(opts);
       });
-    spot
+    program
       .command("reclaim")
       .description("Reclaim SOL rent from empty token accounts")
       .option("--key <name>", "Key to use for signing")
@@ -198,7 +195,7 @@ export class SpotCommand {
       this.#rpc.getScaledUiMultiplier(inputToken.id),
       this.#rpc.getScaledUiMultiplier(outputToken.id),
     ]);
-    const response = await this.#api.ultra.getUltraV1Order({
+    const response = await this.#api.swap.v2.getOrder({
       query: {
         inputMint: inputToken.id,
         outputMint: outputToken.id,
@@ -215,6 +212,9 @@ export class SpotCommand {
       throw new Error("Unable to get a swap quote.");
     }
     const order = response.data;
+    if (!order.inAmount || !order.outAmount) {
+      throw new Error("Swap quote did not include token amounts.");
+    }
 
     const inAmount = NumberConverter.fromChainAmount(
       order.inAmount,
@@ -288,7 +288,7 @@ export class SpotCommand {
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
     const [inputToken, outputToken] = await Promise.all([
-      resolveWalletAsset(this.#api, this.#datapi, signer.address, opts.from),
+      resolveToken(this.#datapi, opts.from),
       resolveToken(this.#datapi, opts.to),
     ]);
 
@@ -391,119 +391,44 @@ export class SpotCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
-    const SOL_DECIMALS = Asset.SOL.decimals;
-
-    const response = await this.#api.ultra.getUltraV1HoldingsAddress({
+    const response = await this.#api.portfolio.getPortfolioV1PositionsAddress({
       path: { address },
     });
     if (response.error || !response.data) {
-      throw new Error("Unable to get spot holdings.");
+      throw new Error("Unable to get portfolio positions.");
     }
-    const raw = response.data;
-
-    // Preprocess: extract only ATA entries, keyed by mint
-    const ataByMint = new Map<string, JupiterApiTypes.UltraTokenAccount>();
-    for (const [mint, accounts] of Object.entries(raw.tokens)) {
-      const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
-      if (ata) {
-        ataByMint.set(mint, ata);
-      }
-    }
-
-    // Resolve all token info via Datapi
-    const allMints = [...ataByMint.keys()];
-    if (!ataByMint.has(Asset.SOL.id)) {
-      allMints.push(Asset.SOL.id);
-    }
-
-    const tokenMap = new Map<string, Token>();
-    const tokens = await getTokensByMints(this.#datapi, allMints);
-    for (const token of tokens) {
-      tokenMap.set(token.id, token);
-    }
-
-    const outputTokens: {
-      id: string;
-      symbol: string;
-      decimals: number;
-      amount: number;
-      rawAmount: string;
-      value: number;
-      price: number;
-      reclaimableLamports?: string;
-    }[] = [];
-
-    // Add combined SOL/WSOL entry
-    const wsolInfo = tokenMap.get(Asset.SOL.id);
-    const solLamports = BigInt(raw.amount);
-    const wsolLamports = BigInt(ataByMint.get(Asset.SOL.id)?.amount ?? "0");
-    const combinedSolLamports = solLamports + wsolLamports;
-    if (wsolInfo && combinedSolLamports > 0n) {
-      const amount = Number(
-        NumberConverter.fromChainAmount(combinedSolLamports, SOL_DECIMALS)
-      );
-      outputTokens.push({
-        id: Asset.SOL.id,
-        symbol: wsolInfo.symbol,
-        decimals: SOL_DECIMALS,
-        amount,
-        rawAmount: combinedSolLamports.toString(),
-        value: amount * (wsolInfo.usdPrice ?? 0),
-        price: wsolInfo.usdPrice ?? 0,
-      });
-    }
-
-    for (const [mint, ata] of ataByMint) {
-      if (mint === Asset.SOL.id) {
-        continue;
-      }
-      const info = tokenMap.get(mint);
-      if (!info) {
-        continue;
-      }
-      const multiplier = await this.#rpc.getScaledUiMultiplier(info.id);
-      const amount = Number(
-        NumberConverter.fromChainAmount(ata.amount, info.decimals, multiplier)
-      );
-      outputTokens.push({
-        id: mint,
-        symbol: info.symbol,
-        decimals: info.decimals,
-        amount,
-        rawAmount: ata.amount,
-        value: amount * (info.usdPrice ?? 0),
-        price: info.usdPrice ?? 0,
-      });
-    }
-
-    // Sort by value descending
-    outputTokens.sort((a, b) => b.value - a.value);
-    const totalValue = outputTokens.reduce((sum, t) => sum + t.value, 0);
+    const positions = response.data.elements ?? [];
+    const totalValue = positions.reduce(
+      (total, position) => total + position.value,
+      0
+    );
 
     if (Output.isJson()) {
-      Output.json({ totalValue, tokens: outputTokens });
+      Output.json({
+        owner: response.data.owner ?? address,
+        totalValue,
+        positions,
+      });
       return;
     }
 
-    if (outputTokens.length === 0) {
-      throw new Error("No holdings found for this address.");
+    if (positions.length === 0) {
+      throw new Error("No portfolio positions found for this address.");
     }
 
     Output.table({
       type: "horizontal",
       headers: {
-        symbol: "Token",
-        amount: "Amount",
-        price: "Price",
+        platform: "Platform",
+        label: "Type",
+        name: "Name",
         value: "Value",
       },
-      rows: outputTokens.map((t) => ({
-        symbol: t.symbol,
-        amount: t.amount.toLocaleString("en-US", {
-          maximumFractionDigits: 6,
-        }),
-        price: Output.formatDollar(t.price),
-        value: Output.formatDollar(t.value),
+      rows: positions.map((position) => ({
+        platform: position.platformId,
+        label: position.label,
+        name: position.name ?? "—",
+        value: Output.formatDollar(position.value),
       })),
     });
     console.log(`\nTotal Value: ${Output.formatDollar(totalValue)}`);
@@ -516,7 +441,6 @@ export class SpotCommand {
     to: string;
     key?: string;
   }): Promise<void> {
-    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
     if (!isAddress(opts.to)) {
       throw new Error("--to must be a valid Solana address.");
@@ -524,12 +448,7 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const token = await resolveWalletAsset(
-      this.#api,
-      this.#datapi,
-      signer.address,
-      opts.token
-    );
+    const token = await resolveToken(this.#datapi, opts.token);
     const multiplier = await this.#rpc.getScaledUiMultiplier(token.id);
     const chainAmount =
       opts.rawAmount ??
@@ -797,29 +716,18 @@ export class SpotCommand {
     key?: string;
     token?: string;
   }): Promise<void> {
-    requireJupiterApiKey();
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const response = await this.#api.ultra.getUltraV1HoldingsAddress({
-      path: { address: signer.address },
-    });
-    if (response.error || !response.data) {
-      throw new Error("Unable to get spot holdings.");
-    }
-
     const owner = signer.transactionSigner;
-    const holdingMints = Object.keys(response.data.tokens);
-    const tokenPrograms =
-      holdingMints.length > 0
-        ? await this.#rpc.getTokenPrograms(holdingMints)
-        : new Map();
     const accountsByProgram = await Promise.all(
-      [...new Set(tokenPrograms.values())].map(async (tokenProgram) => ({
-        tokenProgram,
-        accounts: await this.#rpc.getTokenAccountsByOwner(
-          owner.address,
-          tokenProgram
-        ),
-      }))
+      [TOKEN_PROGRAM_ADDRESS, TOKEN_2022_PROGRAM_ADDRESS].map(
+        async (tokenProgram) => ({
+          tokenProgram,
+          accounts: await this.#rpc.getTokenAccountsByOwner(
+            owner.address,
+            tokenProgram
+          ),
+        })
+      )
     );
     const candidates = accountsByProgram.flatMap(({ tokenProgram, accounts }) =>
       accounts
