@@ -90,6 +90,11 @@ export class Signer {
     return this.#signer.address;
   }
 
+  /** The underlying Solana Kit signer for instruction builders. */
+  public get transactionSigner(): TransactionPartialSigner {
+    return this.#signer;
+  }
+
   public async signTransaction(
     transaction: Base64EncodedBytes
   ): Promise<Base64EncodedWireTransaction> {

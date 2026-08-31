@@ -2,7 +2,9 @@ import type {
   Address,
   Base64EncodedBytes,
   Base64EncodedWireTransaction,
+  BlockhashLifetimeConstraint,
   GetAccountInfoApi,
+  GetLatestBlockhashApi,
   Rpc,
 } from "@solana/kit";
 import { address, createSolanaRpc, unwrapOption } from "@solana/kit";
@@ -36,13 +38,19 @@ type SimulationResult = {
 
 type SolanaRpcOptions = {
   fetch?: typeof fetch;
-  rpcClient?: Rpc<GetAccountInfoApi>;
+  rpcClient?: Rpc<
+    GetAccountInfoApi &
+      GetLatestBlockhashApi &
+  >;
   url?: string;
 };
 
 export class SolanaRpc {
   readonly #fetch: typeof fetch;
-  readonly #rpcClient: Rpc<GetAccountInfoApi>;
+  readonly #rpcClient: Rpc<
+    GetAccountInfoApi &
+      GetLatestBlockhashApi &
+  >;
   readonly #url: string;
   readonly #mints = new Map<string, ReturnType<typeof fetchMint>>();
   readonly #scaledUiMultipliers = new Map<
@@ -76,6 +84,13 @@ export class SolanaRpc {
       throw new Error(`Mint ${mint} is not owned by an SPL Token program.`);
     }
     return account.programAddress;
+  }
+
+  public async getLatestBlockhash(): Promise<BlockhashLifetimeConstraint> {
+    const { value } = await this.#rpcClient
+      .getLatestBlockhash({ commitment: "confirmed" })
+      .send();
+    return value;
   }
 
   async #fetchScaledUiMultiplier(mint: Address): Promise<number | undefined> {

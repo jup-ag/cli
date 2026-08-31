@@ -1,5 +1,13 @@
 import { expect, test } from "bun:test";
-import type { Base64EncodedWireTransaction } from "@solana/kit";
+import type {
+  Base64EncodedWireTransaction,
+  Blockhash,
+  GetAccountInfoApi,
+  GetLatestBlockhashApi,
+  GetMultipleAccountsApi,
+  GetTokenAccountsByOwnerApi,
+  Rpc,
+} from "@solana/kit";
 
 import { SolanaRpc } from "./SolanaRpc.ts";
 
@@ -50,4 +58,32 @@ test("sends a signed transaction through the configured RPC", async () => {
     method: "sendTransaction",
     params: ["c2lnbmVk", { encoding: "base64" }],
   });
+});
+
+test("gets the latest blockhash through Solana Kit's RPC method", async () => {
+  const blockhash = "11111111111111111111111111111111" as Blockhash;
+  let commitment: string | undefined;
+  const rpcClient = {
+    getLatestBlockhash: (config?: { commitment?: string }) => {
+      commitment = config?.commitment;
+      return {
+        send: async () => ({
+          context: { slot: 1n },
+          value: { blockhash, lastValidBlockHeight: 123n },
+        }),
+      };
+    },
+  } as unknown as Rpc<
+    GetAccountInfoApi &
+      GetLatestBlockhashApi &
+      GetMultipleAccountsApi &
+      GetTokenAccountsByOwnerApi
+  >;
+  const rpc = new SolanaRpc({ rpcClient });
+
+  await expect(rpc.getLatestBlockhash()).resolves.toEqual({
+    blockhash,
+    lastValidBlockHeight: 123n,
+  });
+  expect(commitment).toBe("confirmed");
 });
