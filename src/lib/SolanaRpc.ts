@@ -5,14 +5,25 @@ import type {
   BlockhashLifetimeConstraint,
   GetAccountInfoApi,
   GetLatestBlockhashApi,
+  GetMultipleAccountsApi,
+  GetTokenAccountsByOwnerApi,
   Rpc,
 } from "@solana/kit";
-import { address, createSolanaRpc, unwrapOption } from "@solana/kit";
 import {
+  address,
+  createSolanaRpc,
+  parseBase64RpcAccount,
+  unwrapOption,
+} from "@solana/kit";
+import {
+  decodeToken as decodeToken2022,
   fetchMint,
   TOKEN_2022_PROGRAM_ADDRESS,
 } from "@solana-program/token-2022";
-import { TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import {
+  decodeToken,
+  TOKEN_PROGRAM_ADDRESS,
+} from "@solana-program/token";
 
 import { Config } from "./Config.ts";
 import { Signer } from "./Signer.ts";
@@ -36,11 +47,22 @@ type SimulationResult = {
   error?: string;
 };
 
+export type ClosableTokenAccount = {
+  address: Address;
+  amount: bigint;
+  isFrozen: boolean;
+  lamports: bigint;
+  mint: Address;
+  owner: Address;
+};
+
 type SolanaRpcOptions = {
   fetch?: typeof fetch;
   rpcClient?: Rpc<
     GetAccountInfoApi &
       GetLatestBlockhashApi &
+      GetMultipleAccountsApi &
+      GetTokenAccountsByOwnerApi
   >;
   url?: string;
 };
@@ -50,6 +72,8 @@ export class SolanaRpc {
   readonly #rpcClient: Rpc<
     GetAccountInfoApi &
       GetLatestBlockhashApi &
+      GetMultipleAccountsApi &
+      GetTokenAccountsByOwnerApi
   >;
   readonly #url: string;
   readonly #mints = new Map<string, ReturnType<typeof fetchMint>>();
@@ -84,6 +108,56 @@ export class SolanaRpc {
       throw new Error(`Mint ${mint} is not owned by an SPL Token program.`);
     }
     return account.programAddress;
+  }
+
+  public async getTokenPrograms(
+    mints: readonly string[]
+  ): Promise<Map<string, Address>> {
+    const response = await this.#rpcClient
+      .getMultipleAccounts(mints.map(address))
+      .send();
+    const tokenPrograms = new Map<string, Address>();
+
+    for (const [index, account] of response.value.entries()) {
+      const mint = mints[index]!;
+      if (
+        account?.owner !== TOKEN_PROGRAM_ADDRESS &&
+        account?.owner !== TOKEN_2022_PROGRAM_ADDRESS
+      ) {
+        throw new Error(`Mint ${mint} is not owned by an SPL Token program.`);
+      }
+      tokenPrograms.set(mint, account.owner);
+    }
+
+    return tokenPrograms;
+  }
+
+  public async getTokenAccountsByOwner(
+    owner: Address,
+    tokenProgram: Address
+  ): Promise<ClosableTokenAccount[]> {
+    const response = await this.#rpcClient
+      .getTokenAccountsByOwner(
+        owner,
+        { programId: tokenProgram },
+        { encoding: "base64" }
+      )
+      .send();
+
+    return response.value.map(({ account, pubkey }) => {
+      const decoded =
+        tokenProgram === TOKEN_2022_PROGRAM_ADDRESS
+          ? decodeToken2022(parseBase64RpcAccount(pubkey, account))
+          : decodeToken(parseBase64RpcAccount(pubkey, account));
+      return {
+        address: pubkey,
+        amount: decoded.data.amount,
+        isFrozen: decoded.data.state === 2,
+        lamports: decoded.lamports,
+        mint: decoded.data.mint,
+        owner: decoded.data.owner,
+      };
+    });
   }
 
   public async getLatestBlockhash(): Promise<BlockhashLifetimeConstraint> {
