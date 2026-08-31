@@ -38,6 +38,14 @@ export class NumberConverter {
     multiplier?: number | undefined
   ): string {
     const amountString = amount.toString();
+    if (amountString.startsWith("-")) {
+      const converted = this.fromChainAmount(
+        amountString.slice(1),
+        decimals,
+        multiplier
+      );
+      return converted === "0" ? "0" : `-${converted}`;
+    }
 
     let postDecimals: string;
     if (amountString.length <= decimals) {
@@ -67,6 +75,14 @@ export class NumberConverter {
     decimals: number,
     multiplier?: number | undefined
   ): string {
+    if (amount.startsWith("-")) {
+      const converted = this.toChainAmount(
+        amount.slice(1),
+        decimals,
+        multiplier
+      );
+      return converted === "0" ? "0" : `-${converted}`;
+    }
     const [integerPart, fractionalPart] = amount.split(".");
     const postDecimals = this.removeInsignificantZeros(
       (integerPart ?? "") +
