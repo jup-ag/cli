@@ -6,6 +6,7 @@ import { KeysCommand } from "./commands/KeysCommand.ts";
 import { LendCommand } from "./commands/LendCommand.ts";
 import { PerpsCommand } from "./commands/PerpsCommand.ts";
 import { PredictionsCommand } from "./commands/PredictionsCommand.ts";
+import { RecurringCommand } from "./commands/RecurringCommand.ts";
 import { SignCommand } from "./commands/SignCommand.ts";
 import { SpotCommand } from "./commands/SpotCommand.ts";
 import { UpdateCommand } from "./commands/UpdateCommand.ts";
@@ -53,6 +54,7 @@ PredictionsCommand.register(
   solanaRpc,
   jupiterClients.api
 );
+RecurringCommand.register(program, solanaRpc, jupiterClients.api);
 SignCommand.register(program);
 SpotCommand.register(
   program,

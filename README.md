@@ -40,6 +40,9 @@ jup spot swap --from SOL --to USDC --amount 1
 # Reclaim rent from empty token accounts
 jup reclaim
 
+# Create a daily DCA order for ten 10-USDC purchases of SOL
+jup dca create --from USDC --to SOL --amount 100 --interval 86400 --orders 10
+
 # Open a 3x long SOL position with 10 USDC
 jup perps open --asset SOL --side long --amount 10 --input USDC --leverage 3
 # View your perps positions
@@ -84,6 +87,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 - [Keys](docs/keys.md): Private key management
 - [Sign](docs/sign.md): Sign an externally supplied transaction
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
+- [DCA](docs/dca.md): Time-based recurring orders
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
 - [Lend](docs/lend.md): Lending, borrowing, and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
