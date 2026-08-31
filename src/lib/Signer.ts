@@ -98,10 +98,17 @@ export class Signer {
   public async signTransaction(
     transaction: Base64EncodedBytes | Base64EncodedWireTransaction
   ): Promise<Base64EncodedWireTransaction> {
+    return Signer.signTransactionWith([this], transaction);
+  }
+
+  public static async signTransactionWith(
+    signers: readonly Signer[],
+    transaction: Base64EncodedBytes | Base64EncodedWireTransaction
+  ): Promise<Base64EncodedWireTransaction> {
     const txBytes = getBase64Codec().encode(transaction as Base64EncodedBytes);
     const decodedTx = getTransactionCodec().decode(txBytes);
     const signedTx = await partiallySignTransactionWithSigners(
-      [this.#signer],
+      signers.map((signer) => signer.#signer),
       decodedTx
     );
     return getBase64EncodedWireTransaction(signedTx);

@@ -58,4 +58,16 @@ describe("signTransaction", () => {
       "Attempted to sign a transaction with an address that is not a signer for it"
     );
   });
+
+  test("signs with an explicit signer set", async () => {
+    const signer = await Signer.generate();
+    const unsignedTx = createUnsignedTransaction(signer.address);
+
+    const signedTx = await Signer.signTransactionWith([signer], unsignedTx);
+    const decodedTx = getTransactionCodec().decode(
+      getBase64Codec().encode(signedTx)
+    );
+
+    expect(decodedTx.signatures[address(signer.address)]).not.toBeNull();
+  });
 });
