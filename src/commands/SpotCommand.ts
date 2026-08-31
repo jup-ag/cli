@@ -1,5 +1,9 @@
-import { findAssociatedTokenPda } from "@solana-program/token";
-import { isAddress, type Address, type Base64EncodedBytes } from "@solana/kit";
+import {
+  address,
+  isAddress,
+  type Address,
+  type Base64EncodedWireTransaction,
+} from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
 import type {
@@ -8,11 +12,6 @@ import type {
   JupiterApiTypes,
 } from "jupiter-api-ts";
 
-import {
-  UltraClient,
-  type GetHoldingsResponse,
-  type HoldingsTokenAccount,
-} from "../clients/UltraClient.ts";
 import {
   Asset,
   getTokensByMints,
@@ -27,6 +26,11 @@ import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 import type { SolanaRpc } from "../lib/SolanaRpc.ts";
+import {
+  buildCloseTokenAccountsTransaction,
+  buildSolTransferTransaction,
+  buildTokenTransferTransaction,
+} from "../lib/SolanaTransactions.ts";
 import { Swap } from "../lib/Swap.ts";
 
 export class SpotCommand {
@@ -514,6 +518,9 @@ export class SpotCommand {
   }): Promise<void> {
     requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
+    if (!isAddress(opts.to)) {
+      throw new Error("--to must be a valid Solana address.");
+    }
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
@@ -528,33 +535,27 @@ export class SpotCommand {
       opts.rawAmount ??
       NumberConverter.toChainAmount(opts.amount!, token.decimals, multiplier);
 
-    let txResponse;
+    const sender = signer.transactionSigner;
+    const recipient = address(opts.to);
+    let serializedTransaction;
     if (token.id === Asset.SOL.id) {
-      txResponse = await UltraClient.getTransferSolTx({
-        senderAddress: signer.address as Address,
-        receiverAddress: opts.to as Address,
-        amount: chainAmount,
-      });
+      serializedTransaction = await buildSolTransferTransaction(
+        this.#rpc,
+        sender,
+        recipient,
+        BigInt(chainAmount)
+      );
     } else {
       const tokenProgram = await this.#rpc.getTokenProgram(token.id);
-      const [senderTokenAccountAddress] = await findAssociatedTokenPda({
-        mint: token.id as Address,
-        owner: signer.address as Address,
+      serializedTransaction = await buildTokenTransferTransaction({
+        amount: BigInt(chainAmount),
+        decimals: token.decimals,
+        mint: address(token.id),
+        recipient,
+        rpc: this.#rpc,
+        sender,
         tokenProgram,
       });
-      txResponse = await UltraClient.getTransferTokenTx({
-        mint: token.id,
-        tokenDecimals: token.decimals.toString(),
-        tokenProgramId: tokenProgram,
-        senderAddress: signer.address as Address,
-        senderTokenAccountAddress,
-        receiverAddress: opts.to as Address,
-        amount: chainAmount,
-      });
-    }
-
-    if ("error" in txResponse) {
-      throw new Error(txResponse.error);
     }
 
     const humanAmount = NumberConverter.fromChainAmount(
@@ -563,12 +564,12 @@ export class SpotCommand {
       multiplier
     );
     const value = Number(humanAmount) * (token.usdPrice ?? 0);
-    const networkFee = NumberConverter.fromChainAmount(
-      txResponse.feeAmount?.toString() ?? 0n,
-      Asset.SOL.decimals
+    const signedTransaction = await signer.signTransaction(
+      serializedTransaction
     );
 
     if (Config.dryRun) {
+      const simulation = await this.#rpc.simulate(signedTransaction);
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
@@ -581,9 +582,9 @@ export class SpotCommand {
           },
           amount: humanAmount,
           value: value,
-          networkFeeLamports: txResponse.feeAmount,
           signature: null,
-          transaction: txResponse.transaction,
+          serializedTransaction: simulation.serializedTransaction,
+          simulation,
         });
         return;
       }
@@ -599,21 +600,22 @@ export class SpotCommand {
             value: `${humanAmount} ${token.symbol} (${Output.formatDollar(value)})`,
           },
           {
-            label: "Network Fee",
-            value: `${networkFee} SOL`,
+            label: "Serialized Transaction",
+            value: simulation.serializedTransaction,
           },
+          {
+            label: "Simulation",
+            value: simulation.success ? "Passed" : "Failed",
+          },
+          ...(simulation.error
+            ? [{ label: "Error", value: simulation.error }]
+            : []),
         ],
       });
       return;
     }
 
-    const signedTx = await signer.signTransaction(
-      txResponse.transaction as Base64EncodedBytes
-    );
-    const result = await UltraClient.postExecuteTransfer({
-      requestId: txResponse.requestId,
-      signedTransaction: signedTx,
-    });
+    const signature = await this.#rpc.send(signedTransaction);
 
     if (Output.isJson()) {
       Output.json({
@@ -626,8 +628,7 @@ export class SpotCommand {
         },
         amount: humanAmount,
         value: value,
-        networkFeeLamports: txResponse.feeAmount,
-        signature: result.signature,
+        signature,
       });
       return;
     }
@@ -641,11 +642,7 @@ export class SpotCommand {
           label: "Amount",
           value: `${humanAmount} ${token.symbol} (${Output.formatDollar(value)})`,
         },
-        {
-          label: "Network Fee",
-          value: `${networkFee} SOL`,
-        },
-        { label: "Tx Signature", value: result.signature },
+        { label: "Tx Signature", value: signature },
       ],
     });
   }
@@ -802,16 +799,36 @@ export class SpotCommand {
   }): Promise<void> {
     requireJupiterApiKey();
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const holdings = await UltraClient.getHoldings(signer.address);
-
-    // Extract reclaimable mints from holdings ATAs
-    const reclaimableMints: string[] = [];
-    for (const [mint, accounts] of Object.entries(holdings.tokens)) {
-      const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
-      if (ata?.reclaimableLamports && BigInt(ata.reclaimableLamports) > 0n) {
-        reclaimableMints.push(mint);
-      }
+    const response = await this.#api.ultra.getUltraV1HoldingsAddress({
+      path: { address: signer.address },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get spot holdings.");
     }
+
+    const owner = signer.transactionSigner;
+    const holdingMints = Object.keys(response.data.tokens);
+    const tokenPrograms =
+      holdingMints.length > 0
+        ? await this.#rpc.getTokenPrograms(holdingMints)
+        : new Map();
+    const accountsByProgram = await Promise.all(
+      [...new Set(tokenPrograms.values())].map(async (tokenProgram) => ({
+        tokenProgram,
+        accounts: await this.#rpc.getTokenAccountsByOwner(
+          owner.address,
+          tokenProgram
+        ),
+      }))
+    );
+    const candidates = accountsByProgram.flatMap(({ tokenProgram, accounts }) =>
+      accounts
+        .filter((account) => account.amount === 0n && !account.isFrozen)
+        .map((account) => ({ ...account, tokenProgram }))
+    );
+    const reclaimableMints: string[] = [
+      ...new Set(candidates.map((candidate) => candidate.mint)),
+    ];
 
     // Filter to single token if --token provided
     let mints = reclaimableMints;
@@ -842,62 +859,54 @@ export class SpotCommand {
       throw new Error("No reclaimable token accounts found.");
     }
 
-    // Chunk mints into batches of 200 and craft
-    const MAX_MINTS_PER_REQUEST = 200;
-    const batches: string[][] = [];
-    for (let i = 0; i < mints.length; i += MAX_MINTS_PER_REQUEST) {
-      batches.push(mints.slice(i, i + MAX_MINTS_PER_REQUEST));
-    }
-    const craftResponses = await Promise.all(
-      batches.map((batch) =>
-        UltraClient.postReclaimCraft({
-          owner: signer.address,
-          mints: batch,
-        })
-      )
+    const accounts = candidates.filter((candidate) =>
+      mints.includes(candidate.mint)
     );
-
-    // Aggregate across chunks
-    const allTransactions: { requestId: string; transaction: string }[] = [];
-    let netLamportsReclaimed = 0n;
-    let networkFeeLamports = 0n;
-    let totalValueReclaimed = 0;
-    let skippedCount = 0;
-
-    for (const r of craftResponses) {
-      if (r.error) {
-        throw new Error(r.error);
-      }
-      allTransactions.push(...r.transactions);
-      netLamportsReclaimed += BigInt(r.netLamportsReclaimed);
-      networkFeeLamports += BigInt(r.gasCostLamports);
-      totalValueReclaimed += r.netReclaimedUsdAmount ?? 0;
-      skippedCount += r.skippedMints?.length ?? 0;
-    }
-
-    if (allTransactions.length === 0) {
+    if (accounts.length === 0) {
       throw new Error("No reclaimable token accounts found.");
     }
 
+    const grouped = new Map<Address, typeof accounts>();
+    for (const account of accounts) {
+      const group = grouped.get(account.tokenProgram) ?? [];
+      group.push(account);
+      grouped.set(account.tokenProgram, group);
+    }
+    const serializedTransactions: Base64EncodedWireTransaction[] = [];
+    for (const [tokenProgram, group] of grouped) {
+      serializedTransactions.push(
+        await buildCloseTokenAccountsTransaction({
+          accounts: group.map((account) => account.address),
+          owner,
+          rpc: this.#rpc,
+          tokenProgram,
+        })
+      );
+    }
+
+    const rentLamports = accounts.reduce(
+      (total, account) => total + account.lamports,
+      0n
+    );
     const reclaimedSol = NumberConverter.fromChainAmount(
-      netLamportsReclaimed,
+      rentLamports,
       Asset.SOL.decimals
     );
-    const networkFee = NumberConverter.fromChainAmount(
-      networkFeeLamports,
-      Asset.SOL.decimals
-    );
-    const accountCount = mints.length - skippedCount;
+    const accountCount = accounts.length;
 
     if (Config.dryRun) {
+      const simulations = [];
+      for (const transaction of serializedTransactions) {
+        simulations.push(
+          await this.#rpc.simulate(await signer.signTransaction(transaction))
+        );
+      }
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
-          totalLamportsReclaimed: Number(netLamportsReclaimed),
-          totalValueReclaimed: totalValueReclaimed,
-          networkFeeLamports: Number(networkFeeLamports),
+          totalLamportsReclaimed: rentLamports.toString(),
           signatures: null,
-          transactions: allTransactions.map((tx) => tx.transaction),
+          transactions: simulations,
         });
         return;
       }
@@ -908,42 +917,46 @@ export class SpotCommand {
         rows: [
           {
             label: "SOL Reclaimed",
-            value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+            value: `${reclaimedSol} SOL before transaction fees`,
           },
           {
             label: "Accounts Reclaimed",
             value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
           },
-          {
-            label: "Network Fee",
-            value: `${networkFee} SOL`,
-          },
+          ...simulations.flatMap((simulation, index) => [
+            {
+              label:
+                simulations.length === 1
+                  ? "Serialized Transaction"
+                  : `Serialized Transaction ${index + 1}`,
+              value: simulation.serializedTransaction,
+            },
+            {
+              label:
+                simulations.length === 1
+                  ? "Simulation"
+                  : `Simulation ${index + 1}`,
+              value: simulation.success ? "Passed" : "Failed",
+            },
+            ...(simulation.error
+              ? [{ label: "Error", value: simulation.error }]
+              : []),
+          ]),
         ],
       });
       return;
     }
 
-    // Sign and execute each transaction sequentially
     const signatures: string[] = [];
-    for (const tx of allTransactions) {
-      const signedTx = await signer.signTransaction(
-        tx.transaction as Base64EncodedBytes
+    for (const transaction of serializedTransactions) {
+      signatures.push(
+        await this.#rpc.send(await signer.signTransaction(transaction))
       );
-      const result = await UltraClient.postReclaimExecute({
-        requestId: tx.requestId,
-        signedTransaction: signedTx,
-      });
-      if (result.status === "Failed") {
-        throw new Error(result.error ?? "Reclaim transaction failed.");
-      }
-      signatures.push(result.signature);
     }
 
     if (Output.isJson()) {
       Output.json({
-        totalLamportsReclaimed: Number(netLamportsReclaimed),
-        totalValueReclaimed: totalValueReclaimed,
-        networkFeeLamports: Number(networkFeeLamports),
+        totalLamportsReclaimed: rentLamports.toString(),
         signatures,
       });
       return;
@@ -954,15 +967,11 @@ export class SpotCommand {
       rows: [
         {
           label: "SOL Reclaimed",
-          value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+          value: `${reclaimedSol} SOL before transaction fees`,
         },
         {
           label: "Accounts Reclaimed",
           value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
-        },
-        {
-          label: "Network Fee",
-          value: `${networkFee} SOL`,
         },
         ...signatures.map((sig, i) => ({
           label:
@@ -998,14 +1007,6 @@ export class SpotCommand {
     throw new Error(
       `Multiple tokens matching "${input}" found in wallet. Use the mint address instead:\n${options}`
     );
-  }
-
-  private static getHoldingsMints(holdings: GetHoldingsResponse): string[] {
-    const mints = Object.keys(holdings.tokens);
-    if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
-      mints.push(Asset.SOL.id);
-    }
-    return mints;
   }
 
   private static parseTimestamp(value: string): number {

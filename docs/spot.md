@@ -109,7 +109,7 @@ jup spot portfolio --address <wallet-address>
 }
 ```
 
-### Reclaim rent from ATA
+### Reclaim rent from token accounts
 
 ```bash
 jup spot reclaim
@@ -118,15 +118,14 @@ jup spot reclaim --token USDC
 jup spot reclaim --dry-run
 ```
 
-- With no options, reclaims rent from all empty Associated Token Accounts (ATA) owned by the active key's wallet
-- `--dry-run` previews reclaimable amount without executing. JSON response includes the unsigned base64 `transactions` array.
+- With no options, reclaims rent from every empty, non-frozen token account owned by the active key's wallet
+- The command revalidates accounts via the configured RPC, constructs close-account transactions locally, and submits them directly to that RPC
+- `--dry-run` signs and simulates every locally built transaction without submitting it. JSON response includes the signed serialized transactions and each simulation result.
 
 ```js
 // Example JSON response:
 {
-  "totalLamportsReclaimed": 5000, // divide by 10^9 for total SOL reclaimed
-  "totalValueReclaimed": 0.005, // USD value of reclaimed SOL
-  "networkFeeLamports": 5000, // divide by 10^9 for SOL fee
+  "totalLamportsReclaimed": "5000", // rent returned before transaction fees
   "signatures": [ // array of tx signatures for each batch of reclaim tx
     "3dV98zG...",
   ]
@@ -178,9 +177,9 @@ jup spot transfer --token SOL --to <recipient-address> --amount 1 --key mykey
 jup spot transfer --token SOL --to <recipient-address> --amount 1 --dry-run
 ```
 
-- Works with both SOL and any SPL token
+- Works with both SOL and any SPL token. The CLI builds the System Program or SPL Token transaction locally and sends it through the configured RPC URL.
 - `--token` accepts a symbol or mint address
-- `--dry-run` previews the transfer without signing. JSON response includes the unsigned base64 `transaction`.
+- `--dry-run` signs and simulates the transfer without submitting it. JSON response includes the signed `serializedTransaction` and simulation result.
 
 ```js
 // Example JSON response:
@@ -190,7 +189,6 @@ jup spot transfer --token SOL --to <recipient-address> --amount 1 --dry-run
   "token": { "id": "EPjF...USDC", "symbol": "USDC", "decimals": 6 },
   "amount": "50", // human-readable decimal amount
   "value": 50.00, // USD value of transfer
-  "networkFeeLamports": 5000, // divide by 10^9 for SOL fee
   "signature": "4xK29zH..." // tx signature viewable on an explorer
 }
 ```
