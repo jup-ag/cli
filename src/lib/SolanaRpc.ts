@@ -8,6 +8,8 @@ import type {
   GetMultipleAccountsApi,
   GetTokenAccountsByOwnerApi,
   Rpc,
+  SendTransactionApi,
+  SimulateTransactionApi,
 } from "@solana/kit";
 import {
   address,
@@ -20,26 +22,10 @@ import {
   fetchMint,
   TOKEN_2022_PROGRAM_ADDRESS,
 } from "@solana-program/token-2022";
-import {
-  decodeToken,
-  TOKEN_PROGRAM_ADDRESS,
-} from "@solana-program/token";
+import { decodeToken, TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
 
 import { Config } from "./Config.ts";
 import { Signer } from "./Signer.ts";
-
-type RpcError = {
-  message?: string;
-};
-
-type RpcResponse<T> = {
-  result?: T;
-  error?: RpcError;
-};
-
-type SimulationValue = {
-  err: unknown;
-};
 
 type SimulationResult = {
   serializedTransaction: Base64EncodedWireTransaction;
@@ -57,25 +43,26 @@ export type ClosableTokenAccount = {
 };
 
 type SolanaRpcOptions = {
-  fetch?: typeof fetch;
   rpcClient?: Rpc<
     GetAccountInfoApi &
       GetLatestBlockhashApi &
       GetMultipleAccountsApi &
-      GetTokenAccountsByOwnerApi
+      GetTokenAccountsByOwnerApi &
+      SendTransactionApi &
+      SimulateTransactionApi
   >;
   url?: string;
 };
 
 export class SolanaRpc {
-  readonly #fetch: typeof fetch;
   readonly #rpcClient: Rpc<
     GetAccountInfoApi &
       GetLatestBlockhashApi &
       GetMultipleAccountsApi &
-      GetTokenAccountsByOwnerApi
+      GetTokenAccountsByOwnerApi &
+      SendTransactionApi &
+      SimulateTransactionApi
   >;
-  readonly #url: string;
   readonly #mints = new Map<string, ReturnType<typeof fetchMint>>();
   readonly #scaledUiMultipliers = new Map<
     string,
@@ -83,9 +70,8 @@ export class SolanaRpc {
   >();
 
   public constructor(options: SolanaRpcOptions = {}) {
-    this.#fetch = options.fetch ?? fetch;
-    this.#url = options.url ?? Config.getRpcUrl();
-    this.#rpcClient = options.rpcClient ?? createSolanaRpc(this.#url);
+    this.#rpcClient =
+      options.rpcClient ?? createSolanaRpc(options.url ?? Config.getRpcUrl());
   }
 
   public getScaledUiMultiplier(mint: string): Promise<number | undefined> {
@@ -200,11 +186,13 @@ export class SolanaRpc {
   public async simulate(
     serializedTransaction: Base64EncodedWireTransaction
   ): Promise<SimulationResult> {
-    const result = await this.#request<{ value: SimulationValue }>(
-      "simulateTransaction",
-      [serializedTransaction, { encoding: "base64", sigVerify: true }]
-    );
-    const error = this.#formatSimulationError(result.value.err);
+    const { value } = await this.#rpcClient
+      .simulateTransaction(serializedTransaction, {
+        encoding: "base64",
+        sigVerify: true,
+      })
+      .send();
+    const error = this.#formatSimulationError(value.err);
 
     return {
       serializedTransaction,
@@ -216,12 +204,9 @@ export class SolanaRpc {
   public async send(
     serializedTransaction: Base64EncodedWireTransaction
   ): Promise<string> {
-    return this.#request<string>("sendTransaction", [
-      serializedTransaction,
-      {
-        encoding: "base64",
-      },
-    ]);
+    return this.#rpcClient
+      .sendTransaction(serializedTransaction, { encoding: "base64" })
+      .send();
   }
 
   public async signAndSimulate(
@@ -236,28 +221,6 @@ export class SolanaRpc {
     transaction: Base64EncodedBytes
   ): Promise<string> {
     return this.send(await signer.signTransaction(transaction));
-  }
-
-  async #request<T>(method: string, params: unknown[]): Promise<T> {
-    const response = await this.#fetch(this.#url, {
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-    });
-    const payload = (await response.json()) as RpcResponse<T>;
-
-    if (!response.ok) {
-      throw new Error(`RPC ${method} failed with HTTP ${response.status}.`);
-    }
-    if (payload.error) {
-      throw new Error(
-        `RPC ${method} failed: ${payload.error.message ?? "unknown error"}`
-      );
-    }
-    if (payload.result === undefined) {
-      throw new Error(`RPC ${method} returned no result.`);
-    }
-    return payload.result;
   }
 
   #formatSimulationError(error: unknown): string | undefined {
