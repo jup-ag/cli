@@ -30,6 +30,16 @@ describe("Config.load", () => {
     expect(s.apiKey).toBeUndefined();
   });
 
+  test("uses the mainnet RPC fallback when rpcUrl is unset", () => {
+    expect(Config.getRpcUrl()).toBe("https://api.mainnet.solana.com");
+  });
+
+  test("uses a command dry-run flag when present", () => {
+    Config.dryRun = false;
+    expect(Config.resolveDryRun(true)).toBe(true);
+    expect(Config.resolveDryRun(undefined)).toBe(false);
+  });
+
   test("throws a clear error when settings.json is not valid json", () => {
     writeFileSync(
       join(TEST_DIR, "settings.json"),
@@ -55,6 +65,27 @@ describe("Config.load", () => {
       output: "json",
       apiKey: "secret",
     });
+  });
+
+  test("persists a configured HTTPS RPC URL", () => {
+    Config.set({ rpcUrl: "https://rpc.example.com" });
+
+    expect(Config.load().rpcUrl).toBe("https://rpc.example.com");
+    expect(Config.getRpcUrl()).toBe("https://rpc.example.com");
+  });
+
+  test("clears an RPC URL back to the mainnet fallback", () => {
+    Config.set({ rpcUrl: "https://rpc.example.com" });
+    Config.set({ rpcUrl: undefined });
+
+    expect(Config.load().rpcUrl).toBeUndefined();
+    expect(Config.getRpcUrl()).toBe("https://api.mainnet.solana.com");
+  });
+
+  test("rejects non-HTTPS RPC URLs", () => {
+    expect(() => Config.set({ rpcUrl: "http://localhost:8899" })).toThrow(
+      "Invalid RPC URL. It must be an HTTPS URL."
+    );
   });
 
   test("treats non-object root as empty object for fields", () => {

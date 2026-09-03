@@ -31,15 +31,23 @@ jup keys add key1 --seed-phrase "word1 word2 ..." --derivation-path "m/44'/501'/
 # Or import from a private key (accepts hex, base58, base64, or JSON byte array)
 jup keys add key1 --private-key <key>
 
-# Sign a base64 transaction returned from --dry-run
-jup sign --tx <base64-transaction>
-
-# View your spot portfolio
-jup spot portfolio
+# View your portfolio
+jup portfolio
+# View your spot trade history (does not require a Jupiter Core API key)
+jup spot history
 # Swap 1 SOL to USDC
 jup spot swap --from SOL --to USDC --amount 1
 # Reclaim rent from empty token accounts
-jup spot reclaim
+jup reclaim
+
+# Create a daily DCA order for ten 10-USDC purchases of SOL
+jup dca create --from USDC --to SOL --amount 100 --interval 86400 --orders 10
+
+# Send a 10-USDC invite
+jup invite send --token USDC --amount 10
+
+# Show JLP pool statistics
+jup jlp info
 
 # Open a 3x long SOL position with 10 USDC
 jup perps open --asset SOL --side long --amount 10 --input USDC --leverage 3
@@ -52,6 +60,10 @@ jup lend earn tokens
 jup lend earn deposit --token USDC --amount 100
 # View your lending positions
 jup lend earn positions
+# View borrow vaults
+jup lend borrow vaults
+# Deposit collateral and borrow in one transaction
+jup lend borrow operate --vault 1 --collateral 0.03 --debt 1.1
 
 # Browse prediction markets
 jup predictions events --category crypto
@@ -71,7 +83,7 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 > [!NOTE]
 > This CLI is designed to be LLM friendly and **all commands are non-interactive**. Set JSON output mode globally for structured responses: `jup config set --output json`, or use `-f json` flag on individual commands.
 >
-> Use `--dry-run` on any transacting command to preview the result without signing or submitting on-chain. In JSON mode, the response includes the unsigned base64 `transaction`, which can be signed with the `sign` command.
+> Use `--dry-run` on any transacting command to sign and simulate the transaction without submitting it. In JSON mode, the response includes the signed serialized transaction and concise simulation result. Configure the RPC used for simulation and direct on-chain submissions with `jup config set --rpc-url <url>`.
 
 [Read the docs](./docs/) for specific guides, examples, and workflows:
 
@@ -79,10 +91,13 @@ jup vrfd submit --token <mint-address> --project-twitter @projecthandle --descri
 - [Update](docs/update.md): Self-update the CLI
 - [Config](docs/config.md): CLI settings and configurations
 - [Keys](docs/keys.md): Private key management
-- [Sign](docs/sign.md): Sign transactions from `--dry-run`
+- [Sign](docs/sign.md): Sign an externally supplied transaction
 - [Spot](docs/spot.md): Spot trading, transfers, token search and portfolio data
+- [DCA](docs/dca.md): Time-based recurring orders
+- [Invite](docs/invite.md): Jupiter Send token invites
+- [JLP](docs/jlp.md): JLP pool information, minting, and burning
 - [Perps](docs/perps.md): Perps trading (leveraged longs/shorts)
-- [Lend](docs/lend.md): Lending and yield farming
+- [Lend](docs/lend.md): Lending, borrowing, and yield farming
 - [Predictions](docs/predictions.md): Prediction markets
 - [Vrfd](docs/vrfd.md): Token verification
 

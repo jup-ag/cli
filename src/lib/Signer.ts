@@ -90,13 +90,25 @@ export class Signer {
     return this.#signer.address;
   }
 
+  /** The underlying Solana Kit signer for instruction builders. */
+  public get transactionSigner(): TransactionPartialSigner {
+    return this.#signer;
+  }
+
   public async signTransaction(
-    transaction: Base64EncodedBytes
+    transaction: Base64EncodedBytes | Base64EncodedWireTransaction
   ): Promise<Base64EncodedWireTransaction> {
-    const txBytes = getBase64Codec().encode(transaction);
+    return Signer.signTransactionWith([this], transaction);
+  }
+
+  public static async signTransactionWith(
+    signers: readonly Signer[],
+    transaction: Base64EncodedBytes | Base64EncodedWireTransaction
+  ): Promise<Base64EncodedWireTransaction> {
+    const txBytes = getBase64Codec().encode(transaction as Base64EncodedBytes);
     const decodedTx = getTransactionCodec().decode(txBytes);
     const signedTx = await partiallySignTransactionWithSigners(
-      [this.#signer],
+      signers.map((signer) => signer.#signer),
       decodedTx
     );
     return getBase64EncodedWireTransaction(signedTx);

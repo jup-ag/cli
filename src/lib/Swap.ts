@@ -1,24 +1,23 @@
 import type { Base64EncodedBytes } from "@solana/kit";
+import type { JupiterApi, JupiterApiTypes } from "jupiter-api-ts";
 
-import type { Token } from "../clients/DatapiClient.ts";
-import {
-  UltraClient,
-  type GetOrderResponse,
-  type PostExecuteResponse,
-} from "../clients/UltraClient.ts";
+import type { Token } from "./Asset.ts";
 import { Config } from "./Config.ts";
 import { NumberConverter } from "./NumberConverter.ts";
 import type { Signer } from "./Signer.ts";
+import type { SolanaRpc } from "./SolanaRpc.ts";
 
 export type SwapResult = {
   signer: Signer;
-  order: GetOrderResponse;
-  result: PostExecuteResponse | null;
+  order: JupiterApiTypes.GetSwapV2OrderResponse;
+  result: JupiterApiTypes.PostSwapV2ExecuteResponse | null;
   inputToken: Token;
   outputToken: Token;
   inAmount: string;
   outAmount: string;
   networkFeeLamports: number;
+  serializedTransaction?: string;
+  simulation?: Awaited<ReturnType<SolanaRpc["simulate"]>>;
 };
 
 export class Swap {
@@ -35,36 +34,42 @@ export class Swap {
   }
 
   public static async execute(opts: {
+    api: JupiterApi;
     signer: Signer;
     inputToken: Token;
     outputToken: Token;
     amount?: string;
     rawAmount?: string;
+    rpc: SolanaRpc;
     slippageBps?: string;
   }): Promise<SwapResult> {
-    const { signer, inputToken, outputToken } = opts;
-    const inputMultiplier = this.getScaledUiMultiplier(inputToken);
-    const outputMultiplier = this.getScaledUiMultiplier(outputToken);
+    const { api, signer, inputToken, outputToken, rpc } = opts;
+    const [inputMultiplier, outputMultiplier] = await Promise.all([
+      rpc.getScaledUiMultiplier(inputToken.id),
+      rpc.getScaledUiMultiplier(outputToken.id),
+    ]);
 
-    const order = await UltraClient.getOrder({
-      inputMint: inputToken.id,
-      outputMint: outputToken.id,
-      amount:
-        opts.rawAmount ??
-        NumberConverter.toChainAmount(
-          opts.amount!,
-          inputToken.decimals,
-          inputMultiplier
-        ),
-      taker: signer.address,
-      slippageBps: opts.slippageBps,
+    const orderResponse = await api.swap.v2.getOrder({
+      query: {
+        inputMint: inputToken.id,
+        outputMint: outputToken.id,
+        amount:
+          opts.rawAmount ??
+          NumberConverter.toChainAmount(
+            opts.amount!,
+            inputToken.decimals,
+            inputMultiplier
+          ),
+        taker: signer.address,
+        ...(opts.slippageBps ? { slippageBps: Number(opts.slippageBps) } : {}),
+      },
     });
-
-    if (order.error) {
-      throw new Error(order.errorMessage ?? order.error);
+    if (orderResponse.error || !orderResponse.data) {
+      throw new Error("Unable to get a swap order.");
     }
-    if (!order.transaction) {
-      throw new Error("No valid routes found.");
+    const order = orderResponse.data;
+    if (!order.transaction || !order.inAmount || !order.outAmount) {
+      throw new Error(order.errorMessage ?? "No valid routes found.");
     }
 
     let networkFeeLamports = 0;
@@ -72,17 +77,21 @@ export class Swap {
       order.prioritizationFeePayer === signer.address &&
       order.prioritizationFeeLamports
     ) {
-      networkFeeLamports = order.prioritizationFeeLamports;
+      networkFeeLamports = Number(order.prioritizationFeeLamports);
     }
     if (order.rentFeePayer === signer.address && order.rentFeeLamports) {
-      networkFeeLamports += order.rentFeeLamports;
+      networkFeeLamports += Number(order.rentFeeLamports);
     }
     if (
       order.signatureFeePayer === signer.address &&
       order.signatureFeeLamports
     ) {
-      networkFeeLamports += order.signatureFeeLamports;
+      networkFeeLamports += Number(order.signatureFeeLamports);
     }
+
+    const signedTx = await signer.signTransaction(
+      order.transaction as Base64EncodedBytes
+    );
 
     if (Config.dryRun) {
       const inAmount = NumberConverter.fromChainAmount(
@@ -104,16 +113,35 @@ export class Swap {
         inAmount,
         outAmount,
         networkFeeLamports,
+        serializedTransaction: signedTx,
+        simulation: await rpc.simulate(signedTx),
       };
     }
 
-    const signedTx = await signer.signTransaction(
-      order.transaction as Base64EncodedBytes
-    );
-    const result = await UltraClient.postExecute({
-      requestId: order.requestId,
-      signedTransaction: signedTx,
+    if (!order.requestId) {
+      throw new Error("Swap order did not include a request ID.");
+    }
+
+    const executionResponse = await api.swap.v2.postExecute({
+      body: {
+        requestId: order.requestId,
+        ...(order.lastValidBlockHeight
+          ? { lastValidBlockHeight: order.lastValidBlockHeight }
+          : {}),
+        signedTransaction: signedTx,
+      },
     });
+    if (executionResponse.error || !executionResponse.data) {
+      throw new Error("Unable to execute the swap.");
+    }
+    const result = executionResponse.data;
+    if (
+      result.status === "Failed" ||
+      !result.inputAmountResult ||
+      !result.outputAmountResult
+    ) {
+      throw new Error(result.error ?? "Swap execution failed.");
+    }
 
     const inAmount = NumberConverter.fromChainAmount(
       result.inputAmountResult,
@@ -136,16 +164,5 @@ export class Swap {
       outAmount,
       networkFeeLamports,
     };
-  }
-
-  public static getScaledUiMultiplier(token: Token): number | undefined {
-    if (!token.scaledUiConfig) {
-      return undefined;
-    }
-    const isNewMultiplierActive =
-      new Date() >= new Date(token.scaledUiConfig.newMultiplierEffectiveAt);
-    return isNewMultiplierActive
-      ? token.scaledUiConfig.newMultiplier
-      : token.scaledUiConfig.multiplier;
   }
 }

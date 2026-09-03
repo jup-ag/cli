@@ -1,30 +1,52 @@
-import { findAssociatedTokenPda } from "@solana-program/token";
-import { isAddress, type Address, type Base64EncodedBytes } from "@solana/kit";
+import {
+  address,
+  isAddress,
+  type Address,
+  type Base64EncodedWireTransaction,
+} from "@solana/kit";
+import { TOKEN_PROGRAM_ADDRESS } from "@solana-program/token";
+import { TOKEN_2022_PROGRAM_ADDRESS } from "@solana-program/token-2022";
 import chalk from "chalk";
 import type { Command } from "commander";
+import type { JupiterApi, JupiterDatapi } from "jupiter-api-ts";
 
 import {
-  DatapiClient,
-  type SpotTrade,
+  Asset,
+  getTokensByMints,
+  resolveToken,
+  searchTokens,
   type Token,
-} from "../clients/DatapiClient.ts";
-import {
-  UltraClient,
-  type GetHoldingsResponse,
-  type HoldingsTokenAccount,
-} from "../clients/UltraClient.ts";
-import { Asset, resolveWalletAsset } from "../lib/Asset.ts";
+} from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import type { SolanaRpc } from "../lib/SolanaRpc.ts";
+import {
+  buildCloseTokenAccountsTransaction,
+  buildSolTransferTransaction,
+  buildTokenTransferTransaction,
+} from "../lib/SolanaTransactions.ts";
 import { Swap } from "../lib/Swap.ts";
 
 export class SpotCommand {
-  public static register(program: Command): void {
+  static #datapi: JupiterDatapi;
+  static #api: JupiterApi;
+  static #rpc: SolanaRpc;
+
+  public static register(
+    program: Command,
+    datapi: JupiterDatapi,
+    rpc: SolanaRpc,
+    api: JupiterApi
+  ): void {
+    this.#datapi = datapi;
+    this.#rpc = rpc;
+    this.#api = api;
     const spot = program
       .command("spot")
-      .description("Swaps, transfers, token and portfolio data");
+      .description("Swaps, token discovery, and trade history");
     spot
       .command("tokens")
       .description("Search for tokens by symbol or mint address")
@@ -60,10 +82,14 @@ export class SpotCommand {
         "--slippage <bps>",
         "Max slippage in basis points (leave empty to use Jupiter's Real-Time Slippage Estimation)"
       )
-      .action((opts) => this.swap(opts));
-    spot
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.swap(opts);
+      });
+    program
       .command("portfolio")
-      .description("Show spot portfolio for a wallet")
+      .description("Show portfolio positions for a wallet")
       .option("--address <address>", "Wallet address to look up")
       .option("--key <name>", "Key to use (overrides active key)")
       .action((opts) => this.portfolio(opts));
@@ -81,7 +107,7 @@ export class SpotCommand {
       .option("--limit <n>", "Max number of results (max: 15)", "10")
       .option("--offset <offset>", "Pagination offset for next page of results")
       .action((opts) => this.history(opts));
-    spot
+    program
       .command("transfer")
       .description("Transfer tokens to another wallet")
       .requiredOption(
@@ -95,26 +121,36 @@ export class SpotCommand {
         "Amount in on-chain units (no decimal conversion)"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.transfer(opts));
-    spot
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.transfer(opts);
+      });
+    program
       .command("reclaim")
       .description("Reclaim SOL rent from empty token accounts")
       .option("--key <name>", "Key to use for signing")
       .option("--token <token>", "Token symbol or mint address to reclaim")
-      .action((opts) => this.reclaim(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.reclaim(opts);
+      });
   }
 
   private static async tokens(opts: {
     search: string;
     limit?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.limit && isNaN(Number(opts.limit))) {
       throw new Error("--limit must be a number");
     }
 
-    const tokens = await DatapiClient.getTokensSearch({
+    const tokens = await searchTokens({
+      api: this.#api,
       query: opts.search,
-      limit: opts.limit,
+      limit: opts.limit ? Number(opts.limit) : undefined,
     });
 
     if (tokens.length === 0) {
@@ -134,13 +170,11 @@ export class SpotCommand {
         name: "Name",
         price: "Price",
         mcap: "Market Cap",
-        verified: "Verified",
       },
       rows: tokens.map((t) => ({
         ...t,
         price: Output.formatDollar(t.usdPrice),
         mcap: Output.formatDollar(t.mcap),
-        verified: Output.formatBoolean(t.isVerified),
       })),
     });
   }
@@ -151,28 +185,35 @@ export class SpotCommand {
     amount?: string;
     rawAmount?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
-    const [inputToken, outputToken] = await Promise.all([
-      DatapiClient.resolveToken(opts.from),
-      DatapiClient.resolveToken(opts.to),
+    const resolved = await resolveToken(this.#api, [opts.from, opts.to]);
+    const inputToken = this.requireToken(resolved[0], opts.from);
+    const outputToken = this.requireToken(resolved[1], opts.to);
+    const [inputMultiplier, outputMultiplier] = await Promise.all([
+      this.#rpc.getScaledUiMultiplier(inputToken.id),
+      this.#rpc.getScaledUiMultiplier(outputToken.id),
     ]);
-    const inputMultiplier = Swap.getScaledUiMultiplier(inputToken);
-    const outputMultiplier = Swap.getScaledUiMultiplier(outputToken);
-
-    const order = await UltraClient.getOrder({
-      inputMint: inputToken.id,
-      outputMint: outputToken.id,
-      amount:
-        opts.rawAmount ??
-        NumberConverter.toChainAmount(
-          opts.amount!,
-          inputToken.decimals,
-          inputMultiplier
-        ),
+    const response = await this.#api.swap.v2.getOrder({
+      query: {
+        inputMint: inputToken.id,
+        outputMint: outputToken.id,
+        amount:
+          opts.rawAmount ??
+          NumberConverter.toChainAmount(
+            opts.amount!,
+            inputToken.decimals,
+            inputMultiplier
+          ),
+      },
     });
-    if (order.error) {
-      throw new Error(order.errorMessage ?? order.error);
+    if (response.error || !response.data) {
+      throw new Error("Unable to get a swap quote.");
+    }
+    const order = response.data;
+    if (!order.inAmount || !order.outAmount) {
+      throw new Error("Swap quote did not include token amounts.");
     }
 
     const inAmount = NumberConverter.fromChainAmount(
@@ -234,6 +275,7 @@ export class SpotCommand {
     key?: string;
     slippage?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
 
     if (opts.slippage !== undefined) {
@@ -245,17 +287,18 @@ export class SpotCommand {
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const [inputToken, outputToken] = await Promise.all([
-      resolveWalletAsset(signer.address, opts.from),
-      DatapiClient.resolveToken(opts.to),
-    ]);
+    const resolved = await resolveToken(this.#api, [opts.from, opts.to]);
+    const inputToken = this.requireToken(resolved[0], opts.from);
+    const outputToken = this.requireToken(resolved[1], opts.to);
 
     const swap = await Swap.execute({
       signer,
+      api: this.#api,
       inputToken,
       outputToken,
       amount: opts.amount,
       rawAmount: opts.rawAmount,
+      rpc: this.#rpc,
       slippageBps: opts.slippage,
     });
 
@@ -286,7 +329,8 @@ export class SpotCommand {
         priceImpact: swap.order.priceImpact,
         networkFeeLamports: swap.networkFeeLamports,
         ...(Config.dryRun && {
-          transaction: swap.order.transaction,
+          serializedTransaction: swap.serializedTransaction,
+          simulation: swap.simulation,
         }),
       });
       return;
@@ -315,8 +359,20 @@ export class SpotCommand {
           value: `${networkFee} SOL`,
         },
         ...(!Config.dryRun
-          ? [{ label: "Tx Signature", value: swap.result!.signature }]
-          : []),
+          ? [{ label: "Tx Signature", value: swap.result!.signature ?? "—" }]
+          : [
+              {
+                label: "Serialized Transaction",
+                value: swap.serializedTransaction!,
+              },
+              {
+                label: "Simulation",
+                value: swap.simulation!.success ? "Success" : "Failed",
+              },
+              ...(swap.simulation!.error
+                ? [{ label: "Simulation Error", value: swap.simulation!.error }]
+                : []),
+            ]),
       ],
     });
   }
@@ -325,6 +381,7 @@ export class SpotCommand {
     address?: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -333,126 +390,44 @@ export class SpotCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
-    const SOL_DECIMALS = Asset.SOL.decimals;
-
-    const raw = await UltraClient.getHoldings(address);
-
-    // Preprocess: extract only ATA entries, keyed by mint
-    const ataByMint = new Map<string, HoldingsTokenAccount>();
-    for (const [mint, accounts] of Object.entries(raw.tokens)) {
-      const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
-      if (ata) {
-        ataByMint.set(mint, ata);
-      }
+    const response = await this.#api.portfolio.getPortfolioV1PositionsAddress({
+      path: { address },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get portfolio positions.");
     }
-
-    // Resolve all token info via Datapi
-    const allMints = [...ataByMint.keys()];
-    if (!ataByMint.has(Asset.SOL.id)) {
-      allMints.push(Asset.SOL.id);
-    }
-
-    const tokenMap = new Map<string, Token>();
-    const tokens = await DatapiClient.getTokensByMints(allMints);
-    for (const token of tokens) {
-      tokenMap.set(token.id, token);
-    }
-
-    const outputTokens: {
-      id: string;
-      symbol: string;
-      decimals: number;
-      amount: number;
-      rawAmount: string;
-      value: number;
-      price: number;
-      priceChange: number;
-      isVerified?: boolean | undefined;
-      scaledUiMultiplier?: number | undefined;
-      reclaimableLamports?: string;
-    }[] = [];
-
-    // Add combined SOL/WSOL entry
-    const wsolInfo = tokenMap.get(Asset.SOL.id);
-    const solLamports = BigInt(raw.amount);
-    const wsolLamports = BigInt(ataByMint.get(Asset.SOL.id)?.amount ?? "0");
-    const combinedSolLamports = solLamports + wsolLamports;
-    if (wsolInfo && combinedSolLamports > 0n) {
-      const amount = Number(
-        NumberConverter.fromChainAmount(combinedSolLamports, SOL_DECIMALS)
-      );
-      outputTokens.push({
-        id: Asset.SOL.id,
-        symbol: wsolInfo.symbol,
-        decimals: SOL_DECIMALS,
-        amount,
-        rawAmount: combinedSolLamports.toString(),
-        value: amount * (wsolInfo.usdPrice ?? 0),
-        price: wsolInfo.usdPrice ?? 0,
-        priceChange: wsolInfo.stats24h?.priceChange ?? 0,
-        isVerified: wsolInfo.isVerified,
-      });
-    }
-
-    for (const [mint, ata] of ataByMint) {
-      if (mint === Asset.SOL.id) {
-        continue;
-      }
-      const info = tokenMap.get(mint);
-      if (!info) {
-        continue;
-      }
-      const multiplier = Swap.getScaledUiMultiplier(info);
-      const amount = Number(
-        NumberConverter.fromChainAmount(ata.amount, info.decimals, multiplier)
-      );
-      outputTokens.push({
-        id: mint,
-        symbol: info.symbol,
-        decimals: info.decimals,
-        amount,
-        rawAmount: ata.amount,
-        value: amount * (info.usdPrice ?? 0),
-        price: info.usdPrice ?? 0,
-        priceChange: info.stats24h?.priceChange ?? 0,
-        isVerified: info.isVerified,
-        scaledUiMultiplier: multiplier,
-        reclaimableLamports: ata.reclaimableLamports,
-      });
-    }
-
-    // Sort by value descending
-    outputTokens.sort((a, b) => b.value - a.value);
-    const totalValue = outputTokens.reduce((sum, t) => sum + t.value, 0);
+    const positions = response.data.elements ?? [];
+    const totalValue = positions.reduce(
+      (total, position) => total + position.value,
+      0
+    );
 
     if (Output.isJson()) {
-      Output.json({ totalValue, tokens: outputTokens });
+      Output.json({
+        owner: response.data.owner ?? address,
+        totalValue,
+        positions,
+      });
       return;
     }
 
-    if (outputTokens.length === 0) {
-      throw new Error("No holdings found for this address.");
+    if (positions.length === 0) {
+      throw new Error("No portfolio positions found for this address.");
     }
 
     Output.table({
       type: "horizontal",
       headers: {
-        symbol: "Token",
-        amount: "Amount",
-        price: "Price",
+        platform: "Platform",
+        label: "Type",
+        name: "Name",
         value: "Value",
-        priceChange: "24h Change",
-        verified: "Verified",
       },
-      rows: outputTokens.map((t) => ({
-        symbol: t.symbol,
-        amount: t.amount.toLocaleString("en-US", {
-          maximumFractionDigits: 6,
-        }),
-        price: Output.formatDollar(t.price),
-        value: Output.formatDollar(t.value),
-        priceChange: Output.formatPercentageChange(t.priceChange),
-        verified: Output.formatBoolean(t.isVerified),
+      rows: positions.map((position) => ({
+        platform: position.platformId,
+        label: position.label,
+        name: position.name ?? "—",
+        value: Output.formatDollar(position.value),
       })),
     });
     console.log(`\nTotal Value: ${Output.formatDollar(totalValue)}`);
@@ -465,42 +440,44 @@ export class SpotCommand {
     to: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     Swap.validateAmountOpts(opts);
+    if (!isAddress(opts.to)) {
+      throw new Error("--to must be a valid Solana address.");
+    }
 
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
-    const token = await resolveWalletAsset(signer.address, opts.token);
-    const multiplier = Swap.getScaledUiMultiplier(token);
+    const token = this.requireToken(
+      (await resolveToken(this.#api, [opts.token]))[0],
+      opts.token
+    );
+    const multiplier = await this.#rpc.getScaledUiMultiplier(token.id);
     const chainAmount =
       opts.rawAmount ??
       NumberConverter.toChainAmount(opts.amount!, token.decimals, multiplier);
 
-    let txResponse;
+    const sender = signer.transactionSigner;
+    const recipient = address(opts.to);
+    let serializedTransaction;
     if (token.id === Asset.SOL.id) {
-      txResponse = await UltraClient.getTransferSolTx({
-        senderAddress: signer.address as Address,
-        receiverAddress: opts.to as Address,
-        amount: chainAmount,
-      });
+      serializedTransaction = await buildSolTransferTransaction(
+        this.#rpc,
+        sender,
+        recipient,
+        BigInt(chainAmount)
+      );
     } else {
-      const [senderTokenAccountAddress] = await findAssociatedTokenPda({
-        mint: token.id as Address,
-        owner: signer.address as Address,
-        tokenProgram: token.tokenProgram as Address,
+      const tokenProgram = await this.#rpc.getTokenProgram(token.id);
+      serializedTransaction = await buildTokenTransferTransaction({
+        amount: BigInt(chainAmount),
+        decimals: token.decimals,
+        mint: address(token.id),
+        recipient,
+        rpc: this.#rpc,
+        sender,
+        tokenProgram,
       });
-      txResponse = await UltraClient.getTransferTokenTx({
-        mint: token.id,
-        tokenDecimals: token.decimals.toString(),
-        tokenProgramId: token.tokenProgram,
-        senderAddress: signer.address as Address,
-        senderTokenAccountAddress,
-        receiverAddress: opts.to as Address,
-        amount: chainAmount,
-      });
-    }
-
-    if ("error" in txResponse) {
-      throw new Error(txResponse.error);
     }
 
     const humanAmount = NumberConverter.fromChainAmount(
@@ -509,12 +486,12 @@ export class SpotCommand {
       multiplier
     );
     const value = Number(humanAmount) * (token.usdPrice ?? 0);
-    const networkFee = NumberConverter.fromChainAmount(
-      txResponse.feeAmount?.toString() ?? 0n,
-      Asset.SOL.decimals
+    const signedTransaction = await signer.signTransaction(
+      serializedTransaction
     );
 
     if (Config.dryRun) {
+      const simulation = await this.#rpc.simulate(signedTransaction);
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
@@ -527,9 +504,9 @@ export class SpotCommand {
           },
           amount: humanAmount,
           value: value,
-          networkFeeLamports: txResponse.feeAmount,
           signature: null,
-          transaction: txResponse.transaction,
+          serializedTransaction: simulation.serializedTransaction,
+          simulation,
         });
         return;
       }
@@ -545,21 +522,22 @@ export class SpotCommand {
             value: `${humanAmount} ${token.symbol} (${Output.formatDollar(value)})`,
           },
           {
-            label: "Network Fee",
-            value: `${networkFee} SOL`,
+            label: "Serialized Transaction",
+            value: simulation.serializedTransaction,
           },
+          {
+            label: "Simulation",
+            value: simulation.success ? "Passed" : "Failed",
+          },
+          ...(simulation.error
+            ? [{ label: "Error", value: simulation.error }]
+            : []),
         ],
       });
       return;
     }
 
-    const signedTx = await signer.signTransaction(
-      txResponse.transaction as Base64EncodedBytes
-    );
-    const result = await UltraClient.postExecuteTransfer({
-      requestId: txResponse.requestId,
-      signedTransaction: signedTx,
-    });
+    const signature = await this.#rpc.send(signedTransaction);
 
     if (Output.isJson()) {
       Output.json({
@@ -572,8 +550,7 @@ export class SpotCommand {
         },
         amount: humanAmount,
         value: value,
-        networkFeeLamports: txResponse.feeAmount,
-        signature: result.signature,
+        signature,
       });
       return;
     }
@@ -587,11 +564,7 @@ export class SpotCommand {
           label: "Amount",
           value: `${humanAmount} ${token.symbol} (${Output.formatDollar(value)})`,
         },
-        {
-          label: "Network Fee",
-          value: `${networkFee} SOL`,
-        },
-        { label: "Tx Signature", value: result.signature },
+        { label: "Tx Signature", value: signature },
       ],
     });
   }
@@ -605,6 +578,9 @@ export class SpotCommand {
     limit: string;
     offset?: string;
   }): Promise<void> {
+    if (opts.token) {
+      requireJupiterApiKey();
+    }
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -618,19 +594,48 @@ export class SpotCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
     const targetAsset = opts.token
-      ? await DatapiClient.resolveToken(opts.token)
+      ? this.requireToken(
+          (await resolveToken(this.#api, [opts.token]))[0],
+          opts.token
+        )
       : undefined;
-    const { userTrades, next } = await DatapiClient.getSwapsByAddress({
-      address,
-      assetId: targetAsset?.id,
-      after: opts.after ? this.parseTimestamp(opts.after) : undefined,
-      before: opts.before ? this.parseTimestamp(opts.before) : undefined,
-      limit: opts.limit ? limit * 2 : undefined, // double bookkeeping
-      offset: opts.offset,
+    const response = await this.#datapi.getUserTransactions({
+      query: {
+        addresses: address,
+        includeCapitalSide: true,
+        ...(targetAsset ? { assetId: targetAsset.id } : {}),
+        ...(opts.after ? { fromTs: this.parseTimestamp(opts.after) } : {}),
+        ...(opts.before ? { toTs: this.parseTimestamp(opts.before) } : {}),
+        limit: Math.min(limit * 2, 30),
+        ...(opts.offset ? { offset: Number(opts.offset) } : {}),
+      },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Data API history request failed.");
+    }
+    const { next } = response.data;
+    const userTrades = response.data.userTrades.flatMap((trade) => {
+      const type = trade["type"];
+      const usdVolume = trade["usdVolume"];
+      const txHash = trade["txHash"];
+      const assetId = trade["assetId"];
+      const blockTime = trade["blockTime"];
+      const amount = trade["amount"];
+      if (
+        (type !== "buy" && type !== "sell") ||
+        typeof usdVolume !== "number" ||
+        typeof txHash !== "string" ||
+        typeof assetId !== "string" ||
+        typeof blockTime !== "string" ||
+        typeof amount !== "number"
+      ) {
+        return [];
+      }
+      return [{ type, usdVolume, txHash, assetId, blockTime, amount }];
     });
 
     // Group double-bookkeeping entries by txHash
-    const grouped = new Map<string, SpotTrade[]>();
+    const grouped = new Map<string, (typeof userTrades)[number][]>();
     for (const t of userTrades) {
       const existing = grouped.get(t.txHash);
       if (existing) {
@@ -643,7 +648,7 @@ export class SpotCommand {
     // Resolve token metadata for all unique mints
     const mints = [...new Set(userTrades.map((t) => t.assetId))];
     const tokenMap = new Map<string, Token>();
-    const tokens = await DatapiClient.getTokensByMints(mints);
+    const tokens = await getTokensByMints(this.#datapi, mints);
     for (const token of tokens) {
       tokenMap.set(token.id, token);
     }
@@ -721,16 +726,26 @@ export class SpotCommand {
     token?: string;
   }): Promise<void> {
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const holdings = await UltraClient.getHoldings(signer.address);
-
-    // Extract reclaimable mints from holdings ATAs
-    const reclaimableMints: string[] = [];
-    for (const [mint, accounts] of Object.entries(holdings.tokens)) {
-      const ata = accounts.find((acc) => acc.isAssociatedTokenAccount);
-      if (ata?.reclaimableLamports && BigInt(ata.reclaimableLamports) > 0n) {
-        reclaimableMints.push(mint);
-      }
-    }
+    const owner = signer.transactionSigner;
+    const accountsByProgram = await Promise.all(
+      [TOKEN_PROGRAM_ADDRESS, TOKEN_2022_PROGRAM_ADDRESS].map(
+        async (tokenProgram) => ({
+          tokenProgram,
+          accounts: await this.#rpc.getTokenAccountsByOwner(
+            owner.address,
+            tokenProgram
+          ),
+        })
+      )
+    );
+    const candidates = accountsByProgram.flatMap(({ tokenProgram, accounts }) =>
+      accounts
+        .filter((account) => account.amount === 0n && !account.isFrozen)
+        .map((account) => ({ ...account, tokenProgram }))
+    );
+    const reclaimableMints: string[] = [
+      ...new Set(candidates.map((candidate) => candidate.mint)),
+    ];
 
     // Filter to single token if --token provided
     let mints = reclaimableMints;
@@ -761,62 +776,54 @@ export class SpotCommand {
       throw new Error("No reclaimable token accounts found.");
     }
 
-    // Chunk mints into batches of 200 and craft
-    const MAX_MINTS_PER_REQUEST = 200;
-    const batches: string[][] = [];
-    for (let i = 0; i < mints.length; i += MAX_MINTS_PER_REQUEST) {
-      batches.push(mints.slice(i, i + MAX_MINTS_PER_REQUEST));
-    }
-    const craftResponses = await Promise.all(
-      batches.map((batch) =>
-        UltraClient.postReclaimCraft({
-          owner: signer.address,
-          mints: batch,
-        })
-      )
+    const accounts = candidates.filter((candidate) =>
+      mints.includes(candidate.mint)
     );
-
-    // Aggregate across chunks
-    const allTransactions: { requestId: string; transaction: string }[] = [];
-    let netLamportsReclaimed = 0n;
-    let networkFeeLamports = 0n;
-    let totalValueReclaimed = 0;
-    let skippedCount = 0;
-
-    for (const r of craftResponses) {
-      if (r.error) {
-        throw new Error(r.error);
-      }
-      allTransactions.push(...r.transactions);
-      netLamportsReclaimed += BigInt(r.netLamportsReclaimed);
-      networkFeeLamports += BigInt(r.gasCostLamports);
-      totalValueReclaimed += r.netReclaimedUsdAmount ?? 0;
-      skippedCount += r.skippedMints?.length ?? 0;
-    }
-
-    if (allTransactions.length === 0) {
+    if (accounts.length === 0) {
       throw new Error("No reclaimable token accounts found.");
     }
 
+    const grouped = new Map<Address, typeof accounts>();
+    for (const account of accounts) {
+      const group = grouped.get(account.tokenProgram) ?? [];
+      group.push(account);
+      grouped.set(account.tokenProgram, group);
+    }
+    const serializedTransactions: Base64EncodedWireTransaction[] = [];
+    for (const [tokenProgram, group] of grouped) {
+      serializedTransactions.push(
+        await buildCloseTokenAccountsTransaction({
+          accounts: group.map((account) => account.address),
+          owner,
+          rpc: this.#rpc,
+          tokenProgram,
+        })
+      );
+    }
+
+    const rentLamports = accounts.reduce(
+      (total, account) => total + account.lamports,
+      0n
+    );
     const reclaimedSol = NumberConverter.fromChainAmount(
-      netLamportsReclaimed,
+      rentLamports,
       Asset.SOL.decimals
     );
-    const networkFee = NumberConverter.fromChainAmount(
-      networkFeeLamports,
-      Asset.SOL.decimals
-    );
-    const accountCount = mints.length - skippedCount;
+    const accountCount = accounts.length;
 
     if (Config.dryRun) {
+      const simulations = [];
+      for (const transaction of serializedTransactions) {
+        simulations.push(
+          await this.#rpc.simulate(await signer.signTransaction(transaction))
+        );
+      }
       if (Output.isJson()) {
         Output.json({
           dryRun: true,
-          totalLamportsReclaimed: Number(netLamportsReclaimed),
-          totalValueReclaimed: totalValueReclaimed,
-          networkFeeLamports: Number(networkFeeLamports),
+          totalLamportsReclaimed: rentLamports.toString(),
           signatures: null,
-          transactions: allTransactions.map((tx) => tx.transaction),
+          transactions: simulations,
         });
         return;
       }
@@ -827,42 +834,46 @@ export class SpotCommand {
         rows: [
           {
             label: "SOL Reclaimed",
-            value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+            value: `${reclaimedSol} SOL before transaction fees`,
           },
           {
             label: "Accounts Reclaimed",
             value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
           },
-          {
-            label: "Network Fee",
-            value: `${networkFee} SOL`,
-          },
+          ...simulations.flatMap((simulation, index) => [
+            {
+              label:
+                simulations.length === 1
+                  ? "Serialized Transaction"
+                  : `Serialized Transaction ${index + 1}`,
+              value: simulation.serializedTransaction,
+            },
+            {
+              label:
+                simulations.length === 1
+                  ? "Simulation"
+                  : `Simulation ${index + 1}`,
+              value: simulation.success ? "Passed" : "Failed",
+            },
+            ...(simulation.error
+              ? [{ label: "Error", value: simulation.error }]
+              : []),
+          ]),
         ],
       });
       return;
     }
 
-    // Sign and execute each transaction sequentially
     const signatures: string[] = [];
-    for (const tx of allTransactions) {
-      const signedTx = await signer.signTransaction(
-        tx.transaction as Base64EncodedBytes
+    for (const transaction of serializedTransactions) {
+      signatures.push(
+        await this.#rpc.send(await signer.signTransaction(transaction))
       );
-      const result = await UltraClient.postReclaimExecute({
-        requestId: tx.requestId,
-        signedTransaction: signedTx,
-      });
-      if (result.status === "Failed") {
-        throw new Error(result.error ?? "Reclaim transaction failed.");
-      }
-      signatures.push(result.signature);
     }
 
     if (Output.isJson()) {
       Output.json({
-        totalLamportsReclaimed: Number(netLamportsReclaimed),
-        totalValueReclaimed: totalValueReclaimed,
-        networkFeeLamports: Number(networkFeeLamports),
+        totalLamportsReclaimed: rentLamports.toString(),
         signatures,
       });
       return;
@@ -873,15 +884,11 @@ export class SpotCommand {
       rows: [
         {
           label: "SOL Reclaimed",
-          value: `${reclaimedSol} SOL (${Output.formatDollar(totalValueReclaimed)})`,
+          value: `${reclaimedSol} SOL before transaction fees`,
         },
         {
           label: "Accounts Reclaimed",
           value: `${accountCount} token account${accountCount !== 1 ? "s" : ""}`,
-        },
-        {
-          label: "Network Fee",
-          value: `${networkFee} SOL`,
         },
         ...signatures.map((sig, i) => ({
           label:
@@ -900,10 +907,14 @@ export class SpotCommand {
       if (!holdingsMints.includes(input)) {
         throw new Error(`Token ${input} not found in wallet.`);
       }
-      return DatapiClient.resolveToken(input);
+      const [token] = await getTokensByMints(this.#datapi, [input]);
+      if (!token) {
+        throw new Error(`Token ${input} not found in wallet.`);
+      }
+      return token;
     }
 
-    const tokens = await DatapiClient.getTokensByMints(holdingsMints);
+    const tokens = await getTokensByMints(this.#datapi, holdingsMints);
     const query = input.toLowerCase();
     const matches = tokens.filter((t) => t.symbol.toLowerCase() === query);
 
@@ -919,22 +930,21 @@ export class SpotCommand {
     );
   }
 
-  private static getHoldingsMints(holdings: GetHoldingsResponse): string[] {
-    const mints = Object.keys(holdings.tokens);
-    if (BigInt(holdings.amount) > 0n && !mints.includes(Asset.SOL.id)) {
-      mints.push(Asset.SOL.id);
+  private static requireToken(token: Token | undefined, query: string): Token {
+    if (!token) {
+      throw new Error(`Token not found: ${query}`);
     }
-    return mints;
+    return token;
   }
 
-  private static parseTimestamp(value: string): string {
+  private static parseTimestamp(value: string): number {
     if (/^\d+$/.test(value)) {
-      return new Date(Number(value) * 1000).toISOString();
+      return Number(value) * 1000;
     }
     const ms = new Date(value).getTime();
     if (isNaN(ms)) {
       throw new Error(`Invalid date: ${value}`);
     }
-    return new Date(ms).toISOString();
+    return ms;
   }
 }

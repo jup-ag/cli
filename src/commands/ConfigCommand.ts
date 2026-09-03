@@ -21,17 +21,24 @@ export class ConfigCommand {
         "--api-key [key]",
         "Use an API key from https://portal.jup.ag/ for higher rate limits"
       )
+      .option(
+        "--rpc-url [url]",
+        "Set the Solana RPC URL (omit to use public mainnet default)"
+      )
       .action((opts) => this.set(opts));
   }
 
   private static list(): void {
     const settings = Config.load();
+    const display = {
+      ...this.redactForDisplay(settings),
+      rpcUrl: Config.getRpcUrl(),
+    };
     if (Output.isJson()) {
-      Output.json(this.redactForDisplay(settings));
+      Output.json(display);
       return;
     }
 
-    const display = this.redactForDisplay(settings);
     const data = Object.entries(display).map(([key, value]) => ({
       setting: key,
       value: value != null && value !== "" ? String(value) : "",
@@ -56,16 +63,21 @@ export class ConfigCommand {
     activeKey?: string;
     output?: "table" | "json";
     apiKey?: string | true;
+    rpcUrl?: string | true;
   }): void {
     if (opts.output && opts.output !== "table" && opts.output !== "json") {
       throw new Error("Invalid --output format. Must be 'table' or 'json'.");
     }
-    // --api-key without a value (Commander passes `true`) clears the key
-    const { apiKey, ...rest } = opts;
-    Config.set({
-      ...rest,
-      apiKey: typeof apiKey === "string" ? apiKey : undefined,
-    });
+    // An option without a value is `true` in Commander and clears that setting.
+    const { apiKey, rpcUrl, ...rest } = opts;
+    const settings: Parameters<typeof Config.set>[0] = { ...rest };
+    if (apiKey !== undefined) {
+      settings.apiKey = typeof apiKey === "string" ? apiKey : undefined;
+    }
+    if (rpcUrl !== undefined) {
+      settings.rpcUrl = typeof rpcUrl === "string" ? rpcUrl : undefined;
+    }
+    Config.set(settings);
     this.list();
   }
 }

@@ -6,7 +6,10 @@ type Settings = {
   activeKey: "default" | string;
   output: "table" | "json";
   apiKey?: string | undefined;
+  rpcUrl?: string | undefined;
 };
+
+const DEFAULT_RPC_URL = "https://api.mainnet.solana.com";
 
 const DEFAULT_SETTINGS: Settings = {
   activeKey: "default",
@@ -56,13 +59,34 @@ export class Config {
           ? o.output
           : DEFAULT_SETTINGS.output,
       apiKey: typeof o?.apiKey === "string" ? o.apiKey : undefined,
+      rpcUrl: typeof o?.rpcUrl === "string" ? o.rpcUrl : undefined,
     };
+  }
+
+  public static getRpcUrl(): string {
+    return this.load().rpcUrl ?? DEFAULT_RPC_URL;
+  }
+
+  public static resolveDryRun(commandDryRun?: true): boolean {
+    return commandDryRun ?? this.dryRun;
   }
 
   public static set(settings: Partial<Settings>): void {
     if (Object.keys(settings).length === 0) {
       throw new Error("No settings provided to update.");
     }
+    if (settings.rpcUrl !== undefined) {
+      let url: URL;
+      try {
+        url = new URL(settings.rpcUrl);
+      } catch {
+        throw new Error("Invalid RPC URL. It must be an HTTPS URL.");
+      }
+      if (url.protocol !== "https:") {
+        throw new Error("Invalid RPC URL. It must be an HTTPS URL.");
+      }
+    }
+
     const currentSettings = this.load();
     this.save({
       ...currentSettings,
@@ -72,8 +96,12 @@ export class Config {
 
   public static save(settings: Settings): void {
     // Strip undefined optional fields so settings.json stays clean
-    const { apiKey, ...rest } = settings;
-    const out = apiKey ? { ...rest, apiKey } : rest;
+    const { apiKey, rpcUrl, ...rest } = settings;
+    const out = {
+      ...rest,
+      ...(apiKey ? { apiKey } : {}),
+      ...(rpcUrl ? { rpcUrl } : {}),
+    };
     writeFileSync(this.SETTINGS_FILE, JSON.stringify(out, null, 2) + "\n");
   }
 }

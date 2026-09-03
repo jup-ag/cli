@@ -1,21 +1,35 @@
 import type { Base64EncodedBytes } from "@solana/kit";
 import chalk from "chalk";
 import type { Command } from "commander";
-
-import {
-  PredictionsClient,
-  type ClaimPositionResponse,
-  type CreateOrderResponse,
-  type PredictionEvent,
-} from "../clients/PredictionsClient.ts";
-import { resolveWalletAsset } from "../lib/Asset.ts";
+import type {
+  JupiterApi,
+  JupiterApiTypes,
+} from "jupiter-api-ts";
+import { resolveToken } from "../lib/Asset.ts";
 import { Config } from "../lib/Config.ts";
+import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import type { SolanaRpc } from "../lib/SolanaRpc.ts";
+
+type PredictionSubmission = {
+  signature: string | null;
+  serializedTransaction?: string;
+  simulation?: Awaited<ReturnType<SolanaRpc["simulate"]>>;
+};
 
 export class PredictionsCommand {
-  public static register(program: Command): void {
+  static #api: JupiterApi;
+  static #rpc: SolanaRpc;
+
+  public static register(
+    program: Command,
+    rpc: SolanaRpc,
+    api: JupiterApi
+  ): void {
+    this.#rpc = rpc;
+    this.#api = api;
     const predictions = program
       .command("predictions")
       .description("Prediction markets");
@@ -59,7 +73,11 @@ export class PredictionsCommand {
       )
       .option("--input <token>", "Input token (symbol or mint)", "USDC")
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.open(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.open(opts);
+      });
     predictions
       .command("close")
       .description("Close or claim a prediction position")
@@ -67,8 +85,17 @@ export class PredictionsCommand {
         "--position <pubkey>",
         "Position pubkey to close, or 'all'"
       )
+      .option(
+        "--min-sell-price-slippage-bps <bps>",
+        "Maximum close-all sell slippage in basis points",
+        "200"
+      )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.close(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.close(opts);
+      });
     predictions
       .command("history")
       .description("View prediction trading history")
@@ -88,6 +115,7 @@ export class PredictionsCommand {
     offset: string;
     limit: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     const hasListingOpts =
       opts.filter ||
       opts.sort !== "volume24h" ||
@@ -104,22 +132,27 @@ export class PredictionsCommand {
       );
     }
 
-    let data: PredictionEvent[];
+    let data: JupiterApiTypes.PredictionEvent[];
     let hasNext = false;
     let nextOffset: number | undefined;
 
     if (opts.id) {
-      const event = await PredictionsClient.getEvent(opts.id);
-      data = [event];
-    } else if (opts.search) {
-      const start = Number(opts.offset);
-      const end = start + Number(opts.limit);
-      const res = await PredictionsClient.searchEvents({
-        query: opts.search,
-        start,
-        end,
+      const response = await this.#api.prediction.getPredictionV1EventsEventId({
+        path: { eventId: opts.id },
+        query: { includeMarkets: true },
       });
-      data = res.data;
+      if (response.error || !response.data) {
+        throw new Error("Unable to get the prediction event.");
+      }
+      data = [response.data];
+    } else if (opts.search) {
+      const response = await this.#api.prediction.getPredictionV1EventsSearch({
+        query: { query: opts.search, limit: Number(opts.limit) },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Unable to search prediction events.");
+      }
+      data = response.data.data;
     } else {
       const start = Number(opts.offset);
       const limit = Number(opts.limit);
@@ -127,42 +160,48 @@ export class PredictionsCommand {
 
       const { sortBy, sortDirection } = this.normalizeEventSort(opts.sort);
 
-      const res = await PredictionsClient.getEvents({
-        filter: opts.filter,
-        sortBy,
-        sortDirection,
-        category: opts.category,
-        start,
-        end,
+      const response = await this.#api.prediction.getPredictionV1Events({
+        query: {
+          includeMarkets: true,
+          filter: this.normalizeEventFilter(opts.filter),
+          sortBy,
+          sortDirection,
+          category: this.normalizeEventCategory(opts.category),
+          start,
+          end,
+        },
       });
-      data = res.data;
-      hasNext = res.pagination.hasNext;
-      nextOffset = res.pagination.end;
+      if (response.error || !response.data) {
+        throw new Error("Unable to get prediction events.");
+      }
+      data = response.data.data;
+      hasNext = response.data.pagination.hasNext;
+      nextOffset = response.data.pagination.end;
     }
 
     const events = data.map((e) => ({
       eventId: e.eventId,
-      title: e.metadata.title,
-      category: e.category,
+      title: e.metadata?.title ?? "Unknown event",
+      category: e.category ?? "",
       isLive: e.isLive,
-      volumeUsd: NumberConverter.fromMicroUsd(e.volumeUsd),
-      volume24hUsd: NumberConverter.fromMicroUsd(e.volume24hr),
+      volumeUsd: NumberConverter.fromMicroUsd(e.volumeUsd ?? "0"),
+      volume24hUsd: NumberConverter.fromMicroUsd(e.volume24hr ?? "0"),
       startsAt: e.beginAt
         ? new Date(Number(e.beginAt) * 1000).toISOString()
         : null,
-      endsAt: e.metadata.closeTime
+      endsAt: e.metadata?.closeTime
         ? new Date(e.metadata.closeTime).toISOString()
         : null,
       markets: (e.markets ?? []).map((m) => ({
         marketId: m.marketId,
-        title: m.title,
-        status: m.status,
-        rulesPrimary: m.rulesPrimary,
-        rulesSecondary: m.rulesSecondary,
-        yesPriceUsd: m.pricing.buyYesPriceUsd
+        title: m.title ?? "Unknown market",
+        status: m.status ?? "",
+        rulesPrimary: m.rulesPrimary ?? "",
+        rulesSecondary: m.rulesSecondary ?? "",
+        yesPriceUsd: m.pricing?.buyYesPriceUsd
           ? NumberConverter.fromMicroUsd(m.pricing.buyYesPriceUsd)
           : null,
-        noPriceUsd: m.pricing.buyNoPriceUsd
+        noPriceUsd: m.pricing?.buyNoPriceUsd
           ? NumberConverter.fromMicroUsd(m.pricing.buyNoPriceUsd)
           : null,
         result: m.result,
@@ -225,14 +264,14 @@ export class PredictionsCommand {
   }
 
   private static normalizeEventSort(sort: string): {
-    sortBy: string;
-    sortDirection?: string;
+    sortBy: "volume" | "beginAt";
+    sortDirection?: "asc" | "desc";
   } {
     switch (sort) {
       case "volume":
         return { sortBy: "volume" };
       case "volume24h":
-        return { sortBy: "volume24hr" };
+        return { sortBy: "volume" };
       case "recent":
         return { sortBy: "beginAt", sortDirection: "desc" };
       default:
@@ -240,6 +279,56 @@ export class PredictionsCommand {
           "Invalid --sort. Must be one of: volume, volume24h, recent."
         );
     }
+  }
+
+  private static normalizeEventFilter(
+    filter?: string
+  ): "new" | "live" | "trending" | "upcoming" | undefined {
+    if (!filter) {
+      return undefined;
+    }
+    if (["new", "live", "trending", "upcoming"].includes(filter)) {
+      return filter as "new" | "live" | "trending" | "upcoming";
+    }
+    throw new Error(
+      "Invalid --filter. Must be new, live, trending, or upcoming."
+    );
+  }
+
+  private static normalizeEventCategory(
+    category: string
+  ):
+    | "all"
+    | "crypto"
+    | "sports"
+    | "politics"
+    | "esports"
+    | "culture"
+    | "economics"
+    | "tech" {
+    if (
+      [
+        "all",
+        "crypto",
+        "sports",
+        "politics",
+        "esports",
+        "culture",
+        "economics",
+        "tech",
+      ].includes(category)
+    ) {
+      return category as
+        | "all"
+        | "crypto"
+        | "sports"
+        | "politics"
+        | "esports"
+        | "culture"
+        | "economics"
+        | "tech";
+    }
+    throw new Error("Invalid --category.");
   }
 
   private static normalizeSide(side: string): "yes" | "no" {
@@ -258,6 +347,7 @@ export class PredictionsCommand {
     key?: string;
     address?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.position && (opts.key || opts.address)) {
       throw new Error("--position cannot be combined with --key or --address.");
     }
@@ -267,28 +357,43 @@ export class PredictionsCommand {
 
     let data;
     if (opts.position) {
-      const p = await PredictionsClient.getPosition(opts.position);
-      data = [p];
+      const response =
+        await this.#api.prediction.getPredictionV1PositionsPositionPubkey({
+          path: { positionPubkey: opts.position },
+        });
+      if (response.error || !response.data) {
+        throw new Error("Unable to get the prediction position.");
+      }
+      data = [response.data];
     } else {
       const address =
         opts.address ??
         (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
-      const res = await PredictionsClient.getPositions(address);
-      data = res.data;
+      const response = await this.#api.prediction.getPredictionV1Positions({
+        query: { ownerPubkey: address },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Unable to get prediction positions.");
+      }
+      data = response.data.data;
     }
 
     const positions = data.map((p) => ({
       positionPubkey: p.pubkey,
-      event: p.eventMetadata.title,
-      market: p.marketMetadata.title,
+      event: p.eventMetadata.title ?? "Unknown event",
+      market: p.marketMetadata.title ?? "Unknown market",
       side: p.isYes ? "yes" : "no",
       contracts: Number(p.contracts),
       costUsd: NumberConverter.fromMicroUsd(p.totalCostUsd),
-      valueUsd: NumberConverter.fromMicroUsd(p.valueUsd),
-      pnlUsd: NumberConverter.fromMicroUsd(p.pnlUsd),
+      valueUsd: NumberConverter.fromMicroUsd(p.valueUsd ?? "0"),
+      pnlUsd: NumberConverter.fromMicroUsd(p.pnlUsd ?? "0"),
       pnlPct: p.pnlUsdPercent,
-      startsAt: new Date(p.marketMetadata.openTime * 1000).toISOString(),
-      endsAt: new Date(p.marketMetadata.closeTime * 1000).toISOString(),
+      startsAt: p.marketMetadata.openTime
+        ? new Date(p.marketMetadata.openTime * 1000).toISOString()
+        : "",
+      endsAt: p.marketMetadata.closeTime
+        ? new Date(p.marketMetadata.closeTime * 1000).toISOString()
+        : "",
       claimable: this.isClaimable(p),
     }));
 
@@ -327,7 +432,7 @@ export class PredictionsCommand {
           side: sideColor(p.side),
           costUsd: Output.formatDollar(p.costUsd),
           valueUsd: Output.formatDollar(p.valueUsd),
-          pnl: `${Output.formatDollarChange(p.pnlUsd)} (${Output.formatPercentageChange(p.pnlPct)})`,
+          pnl: `${Output.formatDollarChange(p.pnlUsd)} (${Output.formatPercentageChange(p.pnlPct ?? undefined)})`,
           claimable: Output.formatBoolean(p.claimable),
           positionPubkey: p.positionPubkey,
         };
@@ -342,25 +447,32 @@ export class PredictionsCommand {
     input: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     const side = this.normalizeSide(opts.side);
     const isYes = side === "yes";
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
-    const token = await resolveWalletAsset(signer.address, opts.input);
+    const token = (await resolveToken(this.#api, [opts.input]))[0]!;
     const depositAmount = NumberConverter.toChainAmount(
       opts.amount,
       token.decimals
     );
 
-    const res = await PredictionsClient.postOrder({
-      isBuy: true,
-      ownerPubkey: signer.address,
-      marketId: opts.market,
-      isYes,
-      depositAmount,
-      depositMint: token.id,
+    const response = await this.#api.prediction.postPredictionV1Orders({
+      body: {
+        isBuy: true,
+        ownerPubkey: signer.address,
+        marketId: opts.market,
+        isYes,
+        depositAmount,
+        depositMint: token.id,
+      },
     });
+    if (response.error || !response.data) {
+      throw new Error("Unable to build the prediction order.");
+    }
+    const res = response.data;
 
-    const result = await this.signAndExecute(signer, res.transaction);
+    const result = await this.signAndExecute(signer, res);
 
     const { order } = res;
     const contracts = Number(order.contracts);
@@ -384,7 +496,10 @@ export class PredictionsCommand {
         positionPayoutUsd,
         positionPubkey: order.positionPubkey,
         signature: result.signature,
-        ...(Config.dryRun && { transaction: res.transaction }),
+        ...(Config.dryRun && {
+          serializedTransaction: result.serializedTransaction,
+          simulation: result.simulation,
+        }),
       });
       return;
     }
@@ -411,7 +526,24 @@ export class PredictionsCommand {
         { label: "Position", value: order.positionPubkey },
         ...(!Config.dryRun
           ? [{ label: "Tx Signature", value: result.signature! }]
-          : []),
+          : [
+              {
+                label: "Serialized Transaction",
+                value: result.serializedTransaction!,
+              },
+              {
+                label: "Simulation",
+                value: result.simulation!.success ? "Success" : "Failed",
+              },
+              ...(result.simulation!.error
+                ? [
+                    {
+                      label: "Simulation Error",
+                      value: result.simulation!.error,
+                    },
+                  ]
+                : []),
+            ]),
       ],
     });
   }
@@ -422,6 +554,7 @@ export class PredictionsCommand {
     limit: string;
     offset: string;
   }): Promise<void> {
+    requireJupiterApiKey();
     if (opts.address && opts.key) {
       throw new Error("Only one of --address or --key can be provided.");
     }
@@ -434,11 +567,13 @@ export class PredictionsCommand {
       opts.address ??
       (await Signer.loadAddress(opts.key ?? Config.load().activeKey));
 
-    const res = await PredictionsClient.getHistory({
-      ownerPubkey: address,
-      start,
-      end,
+    const response = await this.#api.prediction.getPredictionV1History({
+      query: { ownerPubkey: address, start, end },
     });
+    if (response.error || !response.data) {
+      throw new Error("Unable to get prediction history.");
+    }
+    const res = response.data;
 
     const history = res.data.map((h) => ({
       time: new Date(h.timestamp * 1000).toISOString(),
@@ -506,7 +641,7 @@ export class PredictionsCommand {
   private static isClaimable(p: {
     claimed: boolean;
     isYes: boolean;
-    marketMetadata: { result: "yes" | "no" | null };
+    marketMetadata: { result?: string | null };
   }): boolean {
     return (
       !p.claimed &&
@@ -517,25 +652,70 @@ export class PredictionsCommand {
 
   private static async signAndExecute(
     signer: Signer,
-    transaction: string
-  ): Promise<{ signature: string | null }> {
-    if (Config.dryRun) {
-      return { signature: null };
+    build:
+      | JupiterApiTypes.PredictionCreateOrderResponse
+      | JupiterApiTypes.PredictionClaimPositionResponse
+  ): Promise<PredictionSubmission> {
+    if (!build.transaction) {
+      throw new Error("The prediction API did not return a transaction.");
     }
     const signedTx = await signer.signTransaction(
-      transaction as Base64EncodedBytes
+      build.transaction as Base64EncodedBytes
     );
-    return PredictionsClient.postExecute({ signedTransaction: signedTx });
+    if (Config.dryRun) {
+      return {
+        signature: null,
+        serializedTransaction: signedTx,
+        simulation: await this.#rpc.simulate(signedTx),
+      };
+    }
+    const response = await this.#api.prediction.postPredictionV1Execute({
+      body: {
+        signedTransaction: signedTx,
+        ...("execution" in build && build.execution
+          ? { context: build.execution.context }
+          : {}),
+      },
+    });
+    if (response.error || !response.data) {
+      throw new Error("Unable to execute the prediction transaction.");
+    }
+    if (response.data.status === "Failed") {
+      throw new Error(
+        response.data.error ?? "Prediction transaction execution failed."
+      );
+    }
+    return { signature: response.data.signature ?? null };
   }
 
   private static async close(opts: {
     position: string;
+    minSellPriceSlippageBps: string;
     key?: string;
   }): Promise<void> {
+    requireJupiterApiKey();
+    const minSellPriceSlippageBps = Number(opts.minSellPriceSlippageBps);
+    if (
+      !Number.isInteger(minSellPriceSlippageBps) ||
+      minSellPriceSlippageBps < 0
+    ) {
+      throw new Error(
+        "--min-sell-price-slippage-bps must be a non-negative integer."
+      );
+    }
     const signer = await Signer.load(opts.key ?? Config.load().activeKey);
 
     if (opts.position === "all") {
-      const res = await PredictionsClient.closeAllPositions(signer.address);
+      const response = await this.#api.prediction.deletePredictionV1Positions({
+        body: {
+          ownerPubkey: signer.address,
+          minSellPriceSlippageBps,
+        },
+      });
+      if (response.error || !response.data) {
+        throw new Error("Unable to build prediction close transactions.");
+      }
+      const res = response.data;
 
       if (res.data.length === 0) {
         throw new Error("No open positions to close.");
@@ -545,20 +725,26 @@ export class PredictionsCommand {
         action: string;
         positionPubkey: string;
         signature: string | null;
-        transaction?: string;
+        serializedTransaction?: string;
+        simulation?: Awaited<ReturnType<SolanaRpc["simulate"]>>;
       }[] = [];
 
       for (const item of res.data) {
-        const execResult = await this.signAndExecute(signer, item.transaction);
+        const execResult = await this.signAndExecute(signer, item);
         const isClaim = "position" in item;
         const pubkey = isClaim
-          ? (item as ClaimPositionResponse).position.positionPubkey
-          : (item as CreateOrderResponse).order.positionPubkey;
+          ? item.position.positionPubkey
+          : item.order.positionPubkey;
         results.push({
           action: isClaim ? "claim" : "close",
           positionPubkey: pubkey,
           signature: execResult.signature,
-          ...(Config.dryRun && { transaction: item.transaction }),
+          ...(Config.dryRun
+            ? {
+                serializedTransaction: execResult.serializedTransaction,
+                simulation: execResult.simulation,
+              }
+            : {}),
         });
       }
 
@@ -578,10 +764,14 @@ export class PredictionsCommand {
           headers: {
             action: "Action",
             positionPubkey: "Position",
+            serializedTransaction: "Serialized Transaction",
+            simulation: "Simulation",
           },
           rows: results.map((r) => ({
             action: r.action,
             positionPubkey: r.positionPubkey,
+            serializedTransaction: r.serializedTransaction!,
+            simulation: r.simulation!.success ? "Success" : "Failed",
           })),
         });
         return;
@@ -600,15 +790,29 @@ export class PredictionsCommand {
     }
 
     // Single position
-    const position = await PredictionsClient.getPosition(opts.position);
+    const positionResponse =
+      await this.#api.prediction.getPredictionV1PositionsPositionPubkey({
+        path: { positionPubkey: opts.position },
+      });
+    if (positionResponse.error || !positionResponse.data) {
+      throw new Error("Unable to get the prediction position.");
+    }
+    const position = positionResponse.data;
     const claimable = this.isClaimable(position);
 
     if (claimable) {
-      const res = await PredictionsClient.claimPosition(
-        opts.position,
-        signer.address
-      );
-      const result = await this.signAndExecute(signer, res.transaction);
+      const response =
+        await this.#api.prediction.postPredictionV1PositionsPositionPubkeyClaim(
+          {
+            path: { positionPubkey: opts.position },
+            body: { ownerPubkey: signer.address },
+          }
+        );
+      if (response.error || !response.data) {
+        throw new Error("Unable to build the prediction claim transaction.");
+      }
+      const res = response.data;
+      const result = await this.signAndExecute(signer, res);
 
       const contracts = Number(res.position.contracts);
       const payoutUsd = NumberConverter.fromMicroUsd(
@@ -619,14 +823,17 @@ export class PredictionsCommand {
         Output.json({
           ...(Config.dryRun && { dryRun: true }),
           action: "claim",
-          event: position.eventMetadata.title,
-          market: position.marketMetadata.title,
+          event: position.eventMetadata.title ?? "Unknown event",
+          market: position.marketMetadata.title ?? "Unknown market",
           side: position.isYes ? "yes" : "no",
           positionPubkey: opts.position,
           contracts,
           payoutUsd,
           signature: result.signature,
-          ...(Config.dryRun && { transaction: res.transaction }),
+          ...(Config.dryRun && {
+            serializedTransaction: result.serializedTransaction,
+            simulation: result.simulation,
+          }),
         });
         return;
       }
@@ -638,8 +845,14 @@ export class PredictionsCommand {
         type: "vertical",
         rows: [
           { label: "Action", value: "Claim Position" },
-          { label: "Event", value: position.eventMetadata.title },
-          { label: "Market", value: position.marketMetadata.title },
+          {
+            label: "Event",
+            value: position.eventMetadata.title ?? "Unknown event",
+          },
+          {
+            label: "Market",
+            value: position.marketMetadata.title ?? "Unknown market",
+          },
           {
             label: "Side",
             value: position.isYes ? chalk.green("yes") : chalk.red("no"),
@@ -648,15 +861,37 @@ export class PredictionsCommand {
           { label: "Position", value: opts.position },
           ...(!Config.dryRun
             ? [{ label: "Tx Signature", value: result.signature! }]
-            : []),
+            : [
+                {
+                  label: "Serialized Transaction",
+                  value: result.serializedTransaction!,
+                },
+                {
+                  label: "Simulation",
+                  value: result.simulation!.success ? "Success" : "Failed",
+                },
+                ...(result.simulation!.error
+                  ? [
+                      {
+                        label: "Simulation Error",
+                        value: result.simulation!.error,
+                      },
+                    ]
+                  : []),
+              ]),
         ],
       });
     } else {
-      const res = await PredictionsClient.closePosition(
-        opts.position,
-        signer.address
-      );
-      const result = await this.signAndExecute(signer, res.transaction);
+      const response =
+        await this.#api.prediction.deletePredictionV1PositionsPositionPubkey({
+          path: { positionPubkey: opts.position },
+          body: { ownerPubkey: signer.address },
+        });
+      if (response.error || !response.data) {
+        throw new Error("Unable to build the prediction close transaction.");
+      }
+      const res = response.data;
+      const result = await this.signAndExecute(signer, res);
 
       const { order } = res;
       const contracts = Number(order.contracts);
@@ -667,15 +902,18 @@ export class PredictionsCommand {
         Output.json({
           ...(Config.dryRun && { dryRun: true }),
           action: "close",
-          event: position.eventMetadata.title,
-          market: position.marketMetadata.title,
+          event: position.eventMetadata.title ?? "Unknown event",
+          market: position.marketMetadata.title ?? "Unknown market",
           side: position.isYes ? "yes" : "no",
           positionPubkey: opts.position,
           contracts,
           costUsd,
           feeUsd,
           signature: result.signature,
-          ...(Config.dryRun && { transaction: res.transaction }),
+          ...(Config.dryRun && {
+            serializedTransaction: result.serializedTransaction,
+            simulation: result.simulation,
+          }),
         });
         return;
       }
@@ -687,8 +925,14 @@ export class PredictionsCommand {
         type: "vertical",
         rows: [
           { label: "Action", value: "Close Position" },
-          { label: "Event", value: position.eventMetadata.title },
-          { label: "Market", value: position.marketMetadata.title },
+          {
+            label: "Event",
+            value: position.eventMetadata.title ?? "Unknown event",
+          },
+          {
+            label: "Market",
+            value: position.marketMetadata.title ?? "Unknown market",
+          },
           {
             label: "Side",
             value: position.isYes ? chalk.green("yes") : chalk.red("no"),
@@ -698,7 +942,24 @@ export class PredictionsCommand {
           { label: "Position", value: opts.position },
           ...(!Config.dryRun
             ? [{ label: "Tx Signature", value: result.signature! }]
-            : []),
+            : [
+                {
+                  label: "Serialized Transaction",
+                  value: result.serializedTransaction!,
+                },
+                {
+                  label: "Simulation",
+                  value: result.simulation!.success ? "Success" : "Failed",
+                },
+                ...(result.simulation!.error
+                  ? [
+                      {
+                        label: "Simulation Error",
+                        value: result.simulation!.error,
+                      },
+                    ]
+                  : []),
+              ]),
         ],
       });
     }
@@ -712,6 +973,7 @@ export class PredictionsCommand {
   }
 
   private static formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString();
+    const date = new Date(iso);
+    return isNaN(date.getTime()) ? "Unknown" : date.toLocaleDateString();
   }
 }

@@ -2,18 +2,33 @@ import { isAddress, type Base64EncodedBytes } from "@solana/kit";
 
 import type { Command } from "commander";
 
-import {
-  VrfdClient,
-  type ExecuteResponse,
-  type TokenMetadata,
-} from "../clients/VrfdClient.ts";
+import type { JupiterApi, JupiterApiTypes } from "jupiter-api-ts";
+
 import { Config } from "../lib/Config.ts";
+import { requireJupiterApiKey } from "../lib/JupiterApi.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import type { SolanaRpc } from "../lib/SolanaRpc.ts";
+
+type TokenMetadata = JupiterApiTypes.TokensV2VerificationTokenMetadataInput;
+type VrfdSubmission = {
+  result?: JupiterApiTypes.TokensV2VerificationExpressExecuteResponse;
+  serializedTransaction?: string;
+  simulation?: Awaited<ReturnType<SolanaRpc["simulate"]>>;
+};
 
 export class VrfdCommand {
-  public static register(program: Command): void {
+  static #api: JupiterApi;
+  static #rpc: SolanaRpc;
+
+  public static register(
+    program: Command,
+    rpc: SolanaRpc,
+    api: JupiterApi
+  ): void {
+    this.#rpc = rpc;
+    this.#api = api;
     const vrfd = program.command("vrfd").description("Token verification");
     vrfd
       .command("check")
@@ -58,14 +73,28 @@ export class VrfdCommand {
         "Enable circulating supply URL"
       )
       .option("--key <name>", "Key to use for signing")
-      .action((opts) => this.submit(opts));
+      .option("--dry-run", "Preview without submitting the transaction")
+      .action((opts) => {
+        Config.dryRun = Config.resolveDryRun(opts.dryRun);
+        return this.submit(opts);
+      });
   }
 
   private static async check(opts: { token: string }): Promise<void> {
+    requireJupiterApiKey();
     if (!isAddress(opts.token)) {
       throw new Error("Invalid token mint address.");
     }
-    const eligibility = await VrfdClient.checkEligibility(opts.token);
+    const response =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCheckEligibility(
+        {
+          query: { tokenId: opts.token },
+        }
+      );
+    if (response.error || !response.data) {
+      throw new Error("Unable to check token verification eligibility.");
+    }
+    const eligibility = response.data;
 
     if (Output.isJson()) {
       Output.json(eligibility);
@@ -110,15 +139,28 @@ export class VrfdCommand {
   private static async signAndExecute(
     signer: Signer,
     transaction: string,
-    req: Omit<Parameters<typeof VrfdClient.execute>[0], "transaction">
-  ): Promise<ExecuteResponse | null> {
-    if (Config.dryRun) {
-      return null;
-    }
+    req: Omit<
+      JupiterApiTypes.TokensV2VerificationExpressExecuteBody,
+      "transaction"
+    >
+  ): Promise<VrfdSubmission> {
     const signedTx = await signer.signTransaction(
       transaction as Base64EncodedBytes
     );
-    return VrfdClient.execute({ ...req, transaction: signedTx });
+    if (Config.dryRun) {
+      return {
+        serializedTransaction: signedTx,
+        simulation: await this.#rpc.simulate(signedTx),
+      };
+    }
+    const response =
+      await this.#api.tokens.v2.verification.postTokensV2VerifyExpressExecute({
+        body: { ...req, transaction: signedTx },
+      });
+    if (response.error || !response.data) {
+      throw new Error("Unable to execute the verification transaction.");
+    }
+    return { result: response.data };
   }
 
   private static async submit(opts: {
@@ -146,6 +188,7 @@ export class VrfdCommand {
     metaUseCoingeckoCoinId?: boolean;
     metaUseCirculatingSupplyUrl?: boolean;
   }): Promise<void> {
+    requireJupiterApiKey();
     const settings = Config.load();
     const signer = await Signer.load(opts.key ?? settings.activeKey);
 
@@ -154,7 +197,16 @@ export class VrfdCommand {
     }
 
     // Check eligibility before crafting transaction
-    const eligibility = await VrfdClient.checkEligibility(opts.token);
+    const eligibilityResponse =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCheckEligibility(
+        {
+          query: { tokenId: opts.token },
+        }
+      );
+    if (eligibilityResponse.error || !eligibilityResponse.data) {
+      throw new Error("Unable to check token verification eligibility.");
+    }
+    const eligibility = eligibilityResponse.data;
     if (!eligibility.tokenExists) {
       throw new Error("Token not found.");
     }
@@ -180,7 +232,14 @@ export class VrfdCommand {
     }
 
     // Craft the payment transaction
-    const craftResult = await VrfdClient.craftTxn(signer.address);
+    const craftResponse =
+      await this.#api.tokens.v2.verification.getTokensV2VerifyExpressCraftTxn({
+        query: { senderAddress: signer.address },
+      });
+    if (craftResponse.error || !craftResponse.data) {
+      throw new Error("Unable to build the verification transaction.");
+    }
+    const craftResult = craftResponse.data;
     if (craftResult.error) {
       throw new Error(craftResult.error);
     }
@@ -203,8 +262,8 @@ export class VrfdCommand {
       tokenMetadata,
     });
 
-    if (result?.status === "Failed") {
-      throw new Error(result.error ?? "Verification submission failed.");
+    if (result.result?.status === "Failed") {
+      throw new Error(result.result.error ?? "Verification submission failed.");
     }
 
     if (Output.isJson()) {
@@ -212,15 +271,18 @@ export class VrfdCommand {
         ...(Config.dryRun && { dryRun: true }),
         sender: signer.address,
         tokenId: opts.token,
-        status: result?.status ?? null,
-        signature: result?.signature ?? null,
+        status: result.result?.status ?? null,
+        signature: result.result?.signature ?? null,
         paymentAmount,
         paymentMint: craftResult.mint,
         feeUsd: craftResult.feeUsdAmount ?? null,
-        verificationCreated: result?.verificationCreated ?? null,
-        metadataCreated: result?.metadataCreated ?? null,
+        verificationCreated: result.result?.verificationCreated ?? null,
+        metadataCreated: result.result?.metadataCreated ?? null,
         metadata: tokenMetadata ?? null,
-        ...(Config.dryRun && { transaction: craftResult.transaction }),
+        ...(Config.dryRun && {
+          serializedTransaction: result.serializedTransaction,
+          simulation: result.simulation,
+        }),
       });
       return;
     }
@@ -246,20 +308,39 @@ export class VrfdCommand {
         },
         {
           label: "Verification Created",
-          value: result
-            ? Output.formatBoolean(result.verificationCreated)
+          value: result.result
+            ? Output.formatBoolean(result.result.verificationCreated)
             : "\u2014",
         },
         {
           label: "Metadata Created",
-          value: result
-            ? Output.formatBoolean(result.metadataCreated)
+          value: result.result
+            ? Output.formatBoolean(result.result.metadataCreated)
             : "\u2014",
         },
         ...this.metadataRows(tokenMetadata),
-        ...(!Config.dryRun && result?.signature
-          ? [{ label: "Tx Signature", value: result.signature }]
-          : []),
+        ...(!Config.dryRun && result.result?.signature
+          ? [{ label: "Tx Signature", value: result.result.signature }]
+          : Config.dryRun
+            ? [
+                {
+                  label: "Serialized Transaction",
+                  value: result.serializedTransaction!,
+                },
+                {
+                  label: "Simulation",
+                  value: result.simulation!.success ? "Success" : "Failed",
+                },
+                ...(result.simulation!.error
+                  ? [
+                      {
+                        label: "Simulation Error",
+                        value: result.simulation!.error,
+                      },
+                    ]
+                  : []),
+              ]
+            : []),
       ],
     });
   }

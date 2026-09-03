@@ -16,7 +16,7 @@ bun run dev
 bun build src/index.ts --compile --outfile jup
 
 # Format code
-bunx prettier --write .
+bun run fmt
 
 # Run all tests: lint, typecheck, tests
 bun run ci
@@ -30,11 +30,11 @@ bun run ci
 
 - `ConfigCommand` — `config list`, `config set`
 - `KeysCommand` — `keys list/add/delete/edit/use/solana-import`
-- `LendCommand` — `lend earn tokens/positions/deposit/withdraw`
+- `LendCommand` — `lend earn tokens/positions/deposit/withdraw`, `lend borrow vaults/positions/operate`
 - `PerpsCommand` — `perps positions/markets/open/set/close`
 - `PredictionsCommand` — `predictions events/positions/open/close/history`
 - `SignCommand` — `sign --tx <base64>`
-- `SpotCommand` — `spot tokens/quote/swap/portfolio/transfer/reclaim`
+- `SpotCommand` — `spot tokens/quote/swap/history`, `portfolio`, `transfer`, `reclaim`
 - `UpdateCommand` — `update` (self-update CLI to latest version)
 - `VrfdCommand` — `vrfd check/submit`
 
@@ -63,6 +63,8 @@ bun run ci
 
 **Lend deposit/withdraw flow:** LendClient.getTokens → resolve jlToken → Swap.execute → LendClient.getPositions (updated state)
 
+**Lend borrow flow:** listBorrowVaults / listBorrowPositions → buildBorrowOperateTransaction → Signer.signTransaction → RPC send
+
 **Predictions flow:** PredictionsClient.postOrder → Signer.signTransaction → PredictionsClient.postExecute
 
 **Vrfd flow:** VrfdClient.checkEligibility → VrfdClient.craftTxn → Signer.signTransaction → VrfdClient.execute
@@ -87,7 +89,7 @@ When adding new commands, both input (options/arguments) and output (JSON/table)
 
 ## Code Style
 
-- Prettier with default config (double quotes, semicolons, 80 char width, trailing commas in ES5 positions)
+- Oxfmt with double quotes, semicolons, 80 character line width, and trailing commas in ES5 positions
 - TypeScript strict mode, ESNext target, bundler module resolution
 - All core modules use static methods (no instantiation for Config, Output, NumberConverter, clients)
 - Signer and KeyPair use instance methods with static factory constructors

@@ -79,6 +79,12 @@ describe("fromChainAmount", () => {
     expect(NumberConverter.fromChainAmount("1000000", 6, 0.5)).toBe("0.5");
   });
 
+  test("signed amounts", () => {
+    expect(NumberConverter.fromChainAmount("-1500000", 6)).toBe("-1.5");
+    expect(NumberConverter.fromChainAmount("-30000000", 9)).toBe("-0.03");
+    expect(NumberConverter.fromChainAmount("-0", 6)).toBe("0");
+  });
+
   test("multiplier of 1 is no-op", () => {
     expect(NumberConverter.fromChainAmount("1500000", 6, 1)).toBe("1.5");
   });
@@ -122,6 +128,12 @@ describe("toChainAmount", () => {
 
   test("multiplier of 1 is no-op", () => {
     expect(NumberConverter.toChainAmount("1.5", 6, 1)).toBe("1500000");
+  });
+
+  test("signed amounts", () => {
+    expect(NumberConverter.toChainAmount("-1.5", 6)).toBe("-1500000");
+    expect(NumberConverter.toChainAmount("-0.03", 9)).toBe("-30000000");
+    expect(NumberConverter.toChainAmount("-0", 6)).toBe("0");
   });
 
   test("round-trip with fromChainAmount", () => {
