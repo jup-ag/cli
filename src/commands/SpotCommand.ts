@@ -20,6 +20,12 @@ import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
 import { Swap } from "../lib/Swap.ts";
 
+// Spot history pagination is bounded by the datapi API (which silently caps to 30),
+// but the public docs promise a stricter user-facing limit of 15. Validate that
+// before the network call so users get the same error message regardless of the
+// datapi snapshot we hit. See docs/spot.md.
+const SPOT_HISTORY_MAX_LIMIT = 15;
+
 export class SpotCommand {
   public static register(program: Command): void {
     const spot = program
@@ -612,6 +618,11 @@ export class SpotCommand {
     const limit = Number(opts.limit);
     if (isNaN(limit) || limit <= 0) {
       throw new Error("--limit must be a positive number.");
+    }
+    if (limit > SPOT_HISTORY_MAX_LIMIT) {
+      throw new Error(
+        `--limit must be between 1 and ${SPOT_HISTORY_MAX_LIMIT}.`
+      );
     }
 
     const address =
