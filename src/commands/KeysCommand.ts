@@ -126,7 +126,7 @@ export class KeysCommand {
     );
     const keychainFiles = files.filter((f) => f.endsWith(".keychain.json"));
 
-    const keypairData = await Promise.all(
+    const results = await Promise.allSettled(
       keypairFiles.map(async (file) => {
         const name = file.replace(".json", "");
         const signer = await Signer.load(name);
@@ -139,18 +139,56 @@ export class KeysCommand {
       })
     );
 
-    const keychainData = keychainFiles.map((file) => {
+    // One corrupted or unreadable keypair file must not hide the keys that
+    // are still valid: report the failures and continue with the rest.
+    const keypairData = results
+      .filter(
+        (
+          r
+        ): r is PromiseFulfilledResult<{
+          name: string;
+          address: string;
+          type: string;
+          active: boolean;
+        }> => r.status === "fulfilled"
+      )
+      .map((r) => r.value);
+
+    const loadErrors = results.flatMap((r, i) =>
+      r.status === "rejected"
+        ? [
+            `${keypairFiles[i]}: ${
+              r.reason instanceof Error ? r.reason.message : String(r.reason)
+            }`,
+          ]
+        : []
+    );
+
+    const keychainData = keychainFiles.flatMap((file) => {
       const name = file.replace(".keychain.json", "");
-      const config = KeychainConfig.load(name);
-      return {
-        name,
-        address: config.address,
-        type: config.backend,
-        active: settings.activeKey === name,
-      };
+      try {
+        const config = KeychainConfig.load(name);
+        return [
+          {
+            name,
+            address: config.address,
+            type: config.backend,
+            active: settings.activeKey === name,
+          },
+        ];
+      } catch (e) {
+        loadErrors.push(
+          `${file}: ${e instanceof Error ? e.message : String(e)}`
+        );
+        return [];
+      }
     });
 
     const data = [...keypairData, ...keychainData];
+
+    for (const message of loadErrors) {
+      console.error(`Warning: skipping unreadable key — ${message}`);
+    }
 
     if (Output.isJson()) {
       Output.json(data);
