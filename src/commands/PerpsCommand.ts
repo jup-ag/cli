@@ -311,6 +311,12 @@ export class PerpsCommand {
     if (opts.leverage && opts.size) {
       throw new Error("Only one of --leverage or --size can be provided.");
     }
+    if (opts.leverage) {
+      const lev = Number(opts.leverage);
+      if (isNaN(lev) || lev < 1 || lev > 100) {
+        throw new Error("Leverage must be a number between 1 and 100.");
+      }
+    }
     if (opts.limit && (opts.tp || opts.sl)) {
       throw new Error(
         "--limit cannot be combined with --tp or --sl. Use 'perps set' after the limit order fills."
