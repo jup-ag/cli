@@ -18,6 +18,7 @@ import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import { DateConverter } from "../lib/DateConverter.ts";
 import { Swap } from "../lib/Swap.ts";
 
 export class SpotCommand {
@@ -400,6 +401,20 @@ export class SpotCommand {
       }
       const info = tokenMap.get(mint);
       if (!info) {
+        console.warn(`Warning: Token metadata not found for mint ${mint}. Displaying with limited info.`);
+        outputTokens.push({
+          id: mint,
+          symbol: mint.slice(0, 8) + '...',
+          decimals: 0,
+          amount: Number(ata.amount),
+          rawAmount: ata.amount,
+          value: 0,
+          price: 0,
+          priceChange: 0,
+          isVerified: false,
+          scaledUiMultiplier: 1,
+          reclaimableLamports: ata.reclaimableLamports,
+        });
         continue;
       }
       const multiplier = Swap.getScaledUiMultiplier(info);
@@ -928,13 +943,6 @@ export class SpotCommand {
   }
 
   private static parseTimestamp(value: string): string {
-    if (/^\d+$/.test(value)) {
-      return new Date(Number(value) * 1000).toISOString();
-    }
-    const ms = new Date(value).getTime();
-    if (isNaN(ms)) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-    return new Date(ms).toISOString();
+    return DateConverter.toISO(value);
   }
 }

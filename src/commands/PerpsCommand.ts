@@ -8,6 +8,7 @@ import { Config } from "../lib/Config.ts";
 import { NumberConverter } from "../lib/NumberConverter.ts";
 import { Output } from "../lib/Output.ts";
 import { Signer } from "../lib/Signer.ts";
+import { DateConverter } from "../lib/DateConverter.ts";
 
 export class PerpsCommand {
   public static register(program: Command): void {
@@ -310,6 +311,12 @@ export class PerpsCommand {
     }
     if (opts.leverage && opts.size) {
       throw new Error("Only one of --leverage or --size can be provided.");
+    }
+    if (opts.leverage) {
+      const lev = Number(opts.leverage);
+      if (isNaN(lev) || lev < 1 || lev > 100) {
+        throw new Error("Leverage must be a number between 1 and 100.");
+      }
     }
     if (opts.limit && (opts.tp || opts.sl)) {
       throw new Error(
@@ -904,14 +911,7 @@ export class PerpsCommand {
   }
 
   private static parseTimestamp(value: string): string {
-    if (/^\d+$/.test(value)) {
-      return value;
-    }
-    const ms = new Date(value).getTime();
-    if (isNaN(ms)) {
-      throw new Error(`Invalid date: ${value}`);
-    }
-    return String(Math.floor(ms / 1000));
+    return DateConverter.toUnixSeconds(value);
   }
 
   private static async history(opts: {

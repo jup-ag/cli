@@ -126,7 +126,7 @@ export class KeysCommand {
     );
     const keychainFiles = files.filter((f) => f.endsWith(".keychain.json"));
 
-    const keypairData = await Promise.all(
+    const keypairResults = await Promise.allSettled(
       keypairFiles.map(async (file) => {
         const name = file.replace(".json", "");
         const signer = await Signer.load(name);
@@ -138,6 +138,17 @@ export class KeysCommand {
         };
       })
     );
+
+    const keypairData = keypairResults
+      .map((result, index) => {
+        if (result.status === "fulfilled") {
+          return result.value;
+        }
+        const name = keypairFiles[index]?.replace(".json", "") ?? "unknown";
+        console.warn(`Warning: Failed to load keypair "${name}": ${result.reason}`);
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
 
     const keychainData = keychainFiles.map((file) => {
       const name = file.replace(".keychain.json", "");
