@@ -400,6 +400,20 @@ export class SpotCommand {
       }
       const info = tokenMap.get(mint);
       if (!info) {
+        console.warn(`Warning: Token metadata not found for mint ${mint}. Displaying with limited info.`);
+        outputTokens.push({
+          id: mint,
+          symbol: mint.slice(0, 8) + '...',
+          decimals: 0,
+          amount: Number(ata.amount),
+          rawAmount: ata.amount,
+          value: 0,
+          price: 0,
+          priceChange: 0,
+          isVerified: false,
+          scaledUiMultiplier: 1,
+          reclaimableLamports: ata.reclaimableLamports,
+        });
         continue;
       }
       const multiplier = Swap.getScaledUiMultiplier(info);
